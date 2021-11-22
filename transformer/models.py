@@ -39,6 +39,8 @@ class GraphTransformer(nn.Module):
             x_lap_pos_enc = x_lap_pos_enc.transpose(0, 1)
             x_lap_pos_enc = self.embedding_lap_pos_enc(x_lap_pos_enc)
             output = output + x_lap_pos_enc
+            # Julien would do otherwise:
+            # output = x_lap_pos_enc
         output = self.encoder(output, src_key_padding_mask=masks)
         output = output.permute(1, 0, 2)
         # we make sure to correctly take the masks into account when pooling

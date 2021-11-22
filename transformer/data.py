@@ -107,3 +107,13 @@ class GraphDataset(object):
 
             return padded_x, mask, pos_enc, lap_pos_enc, degree, default_collate(labels)
         return collate
+
+
+class OneHotEdges(object):
+    def __init__(self, num_edge_classes):
+        self.num_edge_classes = num_edge_classes
+        
+
+    def __call__(self, data):
+        data.edge_attr = F.one_hot(data.edge_attr.long()-1, self.num_edge_classes) 
+        return data

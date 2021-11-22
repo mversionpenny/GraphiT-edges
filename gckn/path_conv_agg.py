@@ -79,11 +79,14 @@ class PathConvAggregation(torch.autograd.Function):
 
 from gckn.dynamic_pooling.pooling import dpooling_torch, dpooling
 from gckn.gckn_fast.gckn_fast import path_conv, PathConv
-def path_conv_agg_torch(features, path_indices, kernel_size, pooling='sum', kappa=torch.exp, d_kappa=None, mask=None):
-    embeded = path_conv(path_indices, features)
+def path_conv_agg_torch(features, path_indices, kernel_size, pooling='sum', kappa=torch.exp, d_kappa=None, mask=None, edges_info=None):
+    embeded, embeded_edges = path_conv(path_indices, features, edges_info)
+    if embeded_edges is not None:
+        embeded_edges = kappa(embeded_edges)
+        embeded_edges = dpooling_torch(embeded_edges, kernel_size, pooling)
     embeded = kappa(embeded)
     embeded = dpooling_torch(embeded, kernel_size, pooling)
-    return embeded
+    return embeded, embeded_edges
 
 def path_conv_agg(features, path_indices, kernel_size, pooling='sum', kappa=torch.exp, d_kappa=torch.exp, mask=None):
     ram_saving = MAXRAM <= (2 * path_indices.shape[0] * features.shape[-1] * features.element_size())

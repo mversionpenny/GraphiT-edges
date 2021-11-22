@@ -8,13 +8,17 @@ class PathSequential(nn.Module):
     def __init__(self, input_size, hidden_sizes, path_sizes,
                  kernel_funcs=None, kernel_args_list=None,
                  pooling='mean', 
-                 aggregation=False, **kwargs):
+                 aggregation=False, encode_edges=False, input_edge_size=0, **kwargs):
         super(PathSequential, self).__init__()
+
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.path_sizes = path_sizes
         self.n_layers = len(hidden_sizes)
         self.aggregation = aggregation
+        self.encode_edges = encode_edges
+        self.input_edge_size = input_edge_size
+
 
         layers = []
         output_size = hidden_sizes[-1]
@@ -30,6 +34,7 @@ class PathSequential(nn.Module):
 
             layer = PathLayer(input_size, hidden_sizes[i], path_sizes[i],
                               kernel_func, kernel_args, pooling, aggregation,
+                              self.encode_edges, self.input_edge_size,
                               **kwargs)
             layers.append(layer)
             input_size = hidden_sizes[i]
@@ -52,17 +57,17 @@ class PathSequential(nn.Module):
         for layer in self.layers:
             layer.reset_parameters()
 
-    def forward(self, features, paths_indices, other_info):
+    def forward(self, features, paths_indices, other_info, edges_info=None):
         output = features
         for layer in self.layers:
-            output = layer(output, paths_indices, other_info)
-        return output
+            output, output_edges = layer(output, paths_indices, other_info, edges_info)
+        return output, output_edges
 
-    def representation(self, features, paths_indices, other_info, n=-1):
+    def representation(self, features, paths_indices, other_info, n=-1, edges_info=None):
         if n == -1:
             n = self.n_layers
         for i in range(n):
-            features = self.layers[i](features, paths_indices, other_info)
+            features = self.layers[i](features, paths_indices, other_info, edges_info)
         return features
 
     def normalize_(self):
@@ -87,6 +92,12 @@ class PathSequential(nn.Module):
             if use_cuda:
                 paths = paths.cuda()
 
+            if self.encode_edges:
+                paths_edges = torch.Tensor(
+                    n_sampling_paths, layer.path_size-1, self.input_edge_size)
+                if use_cuda:
+                    paths_edges = paths_edges.cuda()
+
             for data in data_loader.make_batch():
                 if n_sampled_paths >= n_sampling_paths:
                     continue
@@ -94,9 +105,14 @@ class PathSequential(nn.Module):
                 paths_indices = data['paths']
                 n_paths = data['n_paths']
                 n_nodes = data['n_nodes']
-
+                if self.encode_edges:
+                    edges = data['edges']
+                    edge_features = data['edge_features']
+                    paths_edges_indices = data['paths_edges']
                 if use_cuda:
                     features = features.cuda()
+                    edge_features = edge_features.cuda()
+                    edges = edges.cuda()
                     if isinstance(n_paths, list):
                         paths_indices = [p.cuda() for p in paths_indices]
                         n_paths = [p.cuda() for p in n_paths]
@@ -105,20 +121,36 @@ class PathSequential(nn.Module):
                         n_paths = n_paths.cuda()
                     n_nodes = n_nodes.cuda()
                 with torch.no_grad():
-                    features = self.representation(
-                        features, paths_indices,
-                        {'n_paths': n_paths, 'n_nodes': n_nodes}, i)
+                    # edges_info=None
+                    # if self.encode_edges:
+                    #     edges_info={'edges': edges, 'edge_features': edge_features, 'paths_edges': paths_edges}
+                    # features = self.representation(
+                    #     features, paths_indices,
+                    #     {'n_paths': n_paths, 'n_nodes': n_nodes}, n=i,
+                    #     edges_info=edges_info)
                     paths_batch = layer.sample_paths(
                         features, paths_indices, n_paths_per_batch)
                     size = paths_batch.shape[0]
                     size = min(size, n_sampling_paths - n_sampled_paths)
                     paths[n_sampled_paths: n_sampled_paths + size
                           ] = paths_batch[:size]
+                    if self.encode_edges: 
+                        paths_edges_batch = layer.sample_paths_edges( 
+                            edge_features, paths_edges_indices, n_paths_per_batch)
+                        size_edge = paths_edges_batch.shape[0]
+                        size_edge = min(size_edge, n_sampling_paths - n_sampled_paths)
+                        paths_edges[n_sampled_paths: n_sampled_paths + size_edge
+                              ] = paths_edges_batch[:size_edge]
+
                     n_sampled_paths += size
 
             print("total number of sampled paths: {}".format(n_sampled_paths))
             paths = paths[:n_sampled_paths]
             layer.unsup_train(paths, init=init)
+            if self.encode_edges:
+                paths_edges = paths_edges[:n_sampled_paths]
+                layer.unsup_train_edges(paths_edges, init=init)
+
         return
 
     def encode(self, data_loader, use_cuda=False):
@@ -126,12 +158,21 @@ class PathSequential(nn.Module):
             self.cuda()
         self.eval()
         output = []
+        output_edges = None
+        if self.encode_edges:
+            output_edges = []
 
         for data in data_loader.make_batch(shuffle=False):
             features = data['features']
             paths_indices = data['paths']
             n_paths = data['n_paths']
             n_nodes = data['n_nodes']
+            edges_info = None
+            if self.encode_edges:
+                edge_features = data['edge_features']
+                paths_edges = data['paths_edges']
+                edges = data['edges']
+                edges_info={'edges': edges, 'edge_features': edge_features, 'paths_edges': paths_edges}
             size = len(n_nodes)
             if use_cuda:
                 features = features.cuda()
@@ -143,14 +184,23 @@ class PathSequential(nn.Module):
                     n_paths = n_paths.cuda()
                 n_nodes = n_nodes.cuda()
             with torch.no_grad():
-                batch_out = self(features, paths_indices,
+                batch_out, batch_out_edges = self(features, paths_indices,
                                  {'n_paths': n_paths,
-                                  'n_nodes': n_nodes}
-                                 ).cpu()
+                                  'n_nodes': n_nodes},
+                                  edges_info
+                                 )
+                batch_out = batch_out.cpu()
                 batch_out = batch_out.reshape(features.shape[0], -1)
                 batch_out = torch.split(batch_out, n_nodes.numpy().tolist())
+                if batch_out_edges is not None:
+                    batch_out_edges.cpu()
+                    batch_out_edges = batch_out_edges.reshape(features.shape[0], -1)
+                    batch_out_edges = torch.split(batch_out_edges, n_nodes.numpy().tolist())
+                
             output.extend(batch_out)
-        return output
+            if self.encode_edges:
+                output_edges.extend(batch_out_edges)
+        return output, output_edges
 
 
 class GCKNetFeature(nn.Module):
@@ -208,7 +258,7 @@ class GCKNetFeature(nn.Module):
                     n_paths = n_paths.cuda()
                 n_nodes = n_nodes.cuda()
             with torch.no_grad():
-                batch_out = self(features, paths_indices,
+                batch_out, batch_out_edges = self(features, paths_indices,
                                  {'n_paths': n_paths,
                                   'n_nodes': n_nodes}
                                  ).cpu()

@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch_geometric import datasets
 from transformer.models import DiffGraphTransformer, GraphTransformer
-from transformer.data import GraphDataset
+from transformer.data import GraphDataset, OneHotEdges
 from transformer.position_encoding import FullEncoding, LapEncoding, POSENCODINGS
 from transformer.gckn_pe import GCKNEncoding
 from transformer.utils import count_parameters
@@ -60,6 +60,8 @@ def load_args():
     parser.add_argument('--warmup', type=int, default=2000)
     parser.add_argument('--layer-norm', action='store_true', help='use layer norm instead of batch norm')
     parser.add_argument('--zero-diag', action='store_true', help='zero diagonal for PE matrix')
+    parser.add_argument('--encode-edge', action='store_true',
+                        help='if true then we encode the edges')
     args = parser.parse_args()
     args.use_cuda = torch.cuda.is_available()
     args.batch_norm = not args.layer_norm
@@ -201,16 +203,23 @@ def main():
     # number of node attributes for ZINC dataset
     n_tags = 28
 
-    train_dset = datasets.ZINC(data_path, subset=True, split='train')
-    val_dset = datasets.ZINC(data_path, subset=True, split='val')
-    test_dset = datasets.ZINC(data_path, subset=True, split='test')
+    if args.encode_edge:
+        num_edge_classes = 3
+        train_dset = datasets.ZINC(data_path, subset=True, split='train', transform=OneHotEdges(num_edge_classes))
+        val_dset = datasets.ZINC(data_path, subset=True, split='val', transform=OneHotEdges(num_edge_classes))
+        test_dset = datasets.ZINC(data_path, subset=True, split='test', transform=OneHotEdges(num_edge_classes))
+    else:
+        num_edge_classes = 0
+        train_dset = datasets.ZINC(data_path, subset=True, split='train')
+        val_dset = datasets.ZINC(data_path, subset=True, split='val')
+        test_dset = datasets.ZINC(data_path, subset=True, split='test')
 
     gckn_pos_enc_path = '../cache/pe/zinc_gckn_{}_{}_{}_{}_{}_{}.pkl'.format(
         args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
         args.gckn_agg, args.gckn_normalize)
     gckn_pos_encoder = GCKNEncoding(
         gckn_pos_enc_path, args.gckn_dim, args.gckn_path, args.gckn_sigma, args.gckn_pooling,
-        args.gckn_agg, args.gckn_normalize)
+        args.gckn_agg, args.gckn_normalize, args.encode_edge, num_edge_classes)
     print('GCKN Position encoding')
     gckn_pos_enc_values = gckn_pos_encoder.apply_to(
         train_dset, val_dset + test_dset, batch_size=64, n_tags=n_tags)

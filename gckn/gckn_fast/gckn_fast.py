@@ -42,15 +42,41 @@ class PathConv(torch.autograd.Function):
             gckn_fast_cpu.path_conv_backward(grad_input, grad_output.contiguous(), *ctx.saved_variables)
         return None, grad_input
 
-def path_conv(path_indices, features):
+def path_conv(path_indices, features, edges_info):
     import torch.nn.functional as F
-    output = F.embedding(path_indices, features.view(features.shape[0], -1)).view(
-                path_indices.shape[0], path_indices.shape[1], features.shape[1], features.shape[2])
-    output = output.diagonal(dim1=1, dim2=2)
+
+    path_indices_margot = path_indices * features.shape[1] + torch.arange(path_indices.shape[1])
+    features_margot = features.permute(2,0,1).view(features.shape[2],-1).t()
+    
+    # output = F.embedding(path_indices, features.view(features.shape[0], -1)).view(
+    #            path_indices.shape[0], path_indices.shape[1], features.shape[1], features.shape[2])
+
     # output: all_paths x path_size x path_size x hidden_size
     # -> all_paths x hidden_size x path_size
-    output = output.mean(dim=-1)
-    return output
+    
+    
+    # output = output.diagonal(dim1=1, dim2=2) # demander à dexiong
+    
+    output_margot = F.embedding(path_indices_margot, features_margot).permute(0,2,1)
+
+
+    #output = output.mean(dim=-1)
+    output_margot = output_margot.mean(dim=-1)
+
+    output_edges=None
+    output_margot_edges=None
+    if edges_info is not None:
+        path_indices_margot_edges = edges_info['paths_edges'].type(torch.LongTensor) * \
+            edges_info['edge_features'].shape[1] + torch.arange(edges_info['paths_edges'].shape[1])
+        features_margot_edges = edges_info['edge_features'].permute(2,0,1).view(edges_info['edge_features'].shape[2],-1).t()
+        output_margot_edges = F.embedding(path_indices_margot_edges, features_margot_edges).permute(0,2,1)
+        output_margot_edges = output_margot_edges.mean(dim=-1)
+
+        output_edges_2d = F.embedding(edges_info['paths_edges'].type(torch.LongTensor), edges_info['edge_features_todel'].view(edges_info['edge_features'].shape[0], -1))
+        output_edges = output_edges_2d.permute(0,2,1).type(torch.FloatTensor).mean(dim=-1)
+    
+    # return output, output_edges
+    return output_margot, output_margot_edges
 
 def test(cuda=False):
     torch.manual_seed(1234)

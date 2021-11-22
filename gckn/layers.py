@@ -17,14 +17,17 @@ from sklearn.linear_model.base import LinearModel, LinearClassifierMixin
 class PathLayer(nn.Module):
     def __init__(self, input_size, hidden_size, path_size=1,
                  kernel_func='exp', kernel_args=[0.5], pooling='mean',
-                 aggregation=False):
+                 aggregation=False, encode_edges=False, input_edge_size=0):
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.path_size = path_size
+        self.input_edge_size = input_edge_size
 
         self.pooling = pooling
         self.aggregation = aggregation and (path_size > 1)
+
+        self.encode_edges = encode_edges
 
         self.kernel_func = kernel_func
         if isinstance(kernel_args, (int, float)):
@@ -38,8 +41,13 @@ class PathLayer(nn.Module):
         self.d_kappa = lambda x: d_kernel_func(x, *self.kernel_args)
 
         self._need_lintrans_computed = True
+        self._need_lintrans_edges_computed = True
+
         self.weight = nn.Parameter(
             torch.Tensor(path_size, hidden_size, input_size))
+        if self.encode_edges:
+            self.weight_edges = nn.Parameter(
+                torch.Tensor(path_size-1, hidden_size, self.input_edge_size))
 
         if self.aggregation:
             self.register_buffer('lintrans',
@@ -49,9 +57,19 @@ class PathLayer(nn.Module):
             self.register_buffer('divider',
                                  torch.arange(1., path_size + 1).view(-1, 1, 1)
                                  )
+            if self.encode_edges:
+                self.register_buffer('lintrans_edges',
+                                torch.Tensor(path_size-1, hidden_size,
+                                              hidden_size)
+                                )
         else:
             self.register_buffer('lintrans',
                                  torch.Tensor(hidden_size, hidden_size))
+            if self.encode_edges:
+                self.register_buffer('lintrans_edges',
+                                torch.Tensor(hidden_size,
+                                              hidden_size)
+                                )
 
         self.reset_parameters()
 
@@ -64,10 +82,14 @@ class PathLayer(nn.Module):
 
     def normalize_(self):
         normalize_(self.weight.data, dim=-1)
+    
+    def normalize_edges_(self):
+        normalize_(self.weight_edges.data, dim=-1)
 
     def train(self, mode=True):
         super().train(mode)
         self._need_lintrans_computed = True
+        self._need_lintrans_edges_computed = True
 
     def _compute_lintrans(self):
         if not self._need_lintrans_computed:
@@ -85,12 +107,33 @@ class PathLayer(nn.Module):
             self.lintrans.data.copy_(lintrans.data)
         return lintrans
 
-    def forward(self, features, paths_indices, other_info):
+    def _compute_lintrans_edges(self):
+        if not self._need_lintrans_edges_computed:
+            return self.lintrans_edges
+        lintrans_edges = torch.bmm(self.weight_edges, self.weight_edges.permute(0, 2, 1))
+        if self.aggregation:
+            lintrans_edges = lintrans_edges.cumsum(dim=0) / self.divider[0:-1,:,:] # QUESTION DIVIDER
+        else:
+            lintrans_edges = lintrans_edges.mean(dim=0)
+        lintrans_edges = self.kappa(lintrans_edges)
+        lintrans_edges = ops.matrix_inverse_sqrt(lintrans_edges)
+
+        if not self.training:
+            self._need_lintrans_edges_computed = False
+            self.lintrans_edges.data.copy_(lintrans_edges.data)
+        return lintrans_edges
+
+    def forward(self, features, paths_indices, other_info, edges_info=None):
         """
         features: n_nodes x (input_path_size) x input_size
         paths_indices: n_paths x path_size (values < n_nodes)
         output: n_nodes x ((input_path_size) x path_size) x input_size
+        edges_info contains:
+            edges: n_edges * 2
+            edge_features: n_edes * num_edge_features
+            -> is None if no edge_features
         """
+
         # convolution
         self.normalize_()
         norms = features.norm(dim=-1, keepdim=True)
@@ -98,7 +141,16 @@ class PathLayer(nn.Module):
         # output = features / norms.clamp(min=EPS)
         output = torch.tensordot(features, self.weight, dims=[[-1], [-1]])
         output = output / norms.clamp(min=EPS).unsqueeze(2)
+
+        output_edges = None
+        if edges_info is not None:
+            norms_edges = edges_info['edge_features'].type(torch.FloatTensor).norm(dim=-1, keepdim=True)
+            output_edges = torch.tensordot(edges_info['edge_features'].type(torch.FloatTensor), self.weight_edges, dims=[[-1], [-1]])
+            output_edges = output_edges / norms_edges.clamp(min=EPS).unsqueeze(2)
+            n_edges = output_edges.shape[0]
+
         n_nodes = output.shape[0]
+
         if output.ndim == 4:
             output = output.permute(0, 2, 1, 3).contiguous()
         # output: n_nodes x path_size x (input_path_size) x hidden_size
@@ -109,31 +161,60 @@ class PathLayer(nn.Module):
             mask = [None for _ in range(self.path_size)]
         if 'mask' in other_info and self.path_size > 1:
             mask = other_info['mask']
-
         output = output.view(n_nodes, self.path_size, -1)
+        if edges_info is not None:
+            output_edges = output_edges.view(n_edges, self.path_size-1, -1)
         # output: n_nodes x path_size x (input_path_size x hidden_size)
         if self.aggregation:
             outputs = []
+            outputs_edges = []
             for i in range(self.path_size):
-                embeded = path_conv_agg(
+                edges_info_send = None
+                if self.encode_edges:
+                    if i == 0 or edges_info is None:
+                        edges_info_send = None
+                    else:
+                        edges_info_send={'edges': edges_info['edges'], 'edge_features': output_edges, 
+                        'edge_features_todel': edges_info['edge_features'], 'paths_edges': edges_info['paths_edges'][i-1]}
+                
+                embeded, embeded_edges = path_conv_agg(
                     output, paths_indices[i], other_info['n_paths'][i],
-                    self.pooling, self.kappa, self.d_kappa, mask[i])
+                    self.pooling, self.kappa, self.d_kappa, mask[i], edges_info_send)
+                
+                if self.encode_edges:
+                    if edges_info_send is not None:
+                        outputs_edges.append(embeded_edges)
+
                 outputs.append(embeded)
             output = torch.stack(outputs, dim=0)
-            output = output.view(self.path_size, -1, self.hidden_size)
+            # maybe we'll have a problem here
+            output = output.view(self.path_size, -1, outputs[0].shape[1])
+            #output = output.view(self.path_size, -1, self.hidden_size)
             # output: path_size x (n_nodes x (input_path_size)) x hidden_size
             output = norms.view(1, -1, 1) * output
+            if self.encode_edges:
+                output_edges = torch.stack(outputs_edges, dim=0)
+                output_edges = output_edges.view(self.path_size-1, -1, outputs_edges[0].shape[1])
         else:
-            output = path_conv_agg(
+            edges_info_send = None
+            if self.encode_edges:
+                    edges_info_send={'edges': edges_info['edges'], 'edge_features': edges_info['edge_features'], 'paths_edges': edges_info['paths_edges'][-1]}
+            output, output_edges = path_conv_agg(
                 output, paths_indices[self.path_size - 1],
                 other_info['n_paths'][self.path_size - 1],
-                self.pooling, self.kappa, self.d_kappa, mask)
+                self.pooling, self.kappa, self.d_kappa, mask, edges_info_send)
             # output: n_nodes x ((input_path_size) x hidden_size)
-            output = output.view(n_nodes, -1, self.hidden_size)
+            output = output.view(n_nodes, -1, output.shape[1])
             output = norms.view(n_nodes, -1, 1) * output
             # output: n_nodes x (input_path_size) x hidden_size
 
+            if self.encode_edges:
+                output_edges = output_edges.view(n_nodes, -1, output_edges.shape[1])
+            # output: n_nodes x (input_path_size) x hidden_size
+
         lintrans = self._compute_lintrans()
+        if self.encode_edges:
+            lintrans_edges = self._compute_lintrans_edges()
         # linear transformation
         if self.aggregation:
             output = output.bmm(lintrans)
@@ -141,11 +222,17 @@ class PathLayer(nn.Module):
             output = output.permute(1, 0, 2)
             output = output.reshape(n_nodes, -1, self.hidden_size)
             output = output.contiguous()
+            if self.encode_edges:
+                output_edges = output_edges.bmm(lintrans_edges)
+                output_edges = output_edges.permute(1, 0, 2)
+                output_edges = output_edges.reshape(n_nodes, -1, self.hidden_size)
+                output_edges = output_edges.contiguous()
         else:
             output = torch.tensordot(output, lintrans, dims=[[-1], [-1]])
         # output: n_nodes x ((input_path_size) x path_size) x hidden_size
-
-        return output
+            if self.encode_edges:
+                output_edges = torch.tensordot(output_edges, lintrans_edges, dims=[[-1], [-1]])
+        return output, output_edges
 
     def sample_paths(self, features, paths_indices, n_sampling_paths=1000):
         """Sample paths for a given of features and paths
@@ -171,13 +258,33 @@ class PathLayer(nn.Module):
             paths = paths[:min(paths.shape[0], n_sampling_paths)]
         return paths
 
+    def sample_paths_edges(self, features, paths_indices, n_sampling_paths=1000):
+        """Sample paths for a given of features and paths
+        features: n_nodes x (input_path_size) x input_size
+        paths_indices: n_paths x path_size
+        output: n_sampling_paths x path_size x input_size
+        """
+        paths_indices = paths_indices[self.path_size - 2]
+        if self.path_size == 1:
+            return
+        n_all_paths = paths_indices.shape[0]
+        indices = torch.randperm(n_all_paths)[:min(n_all_paths, n_sampling_paths)]
+        paths = F.embedding(paths_indices[indices], features)
+        # paths: n_sampling_paths x path_size x (input_path_size) x input_size
+        if paths.ndim == 4:
+            paths = paths.permute(0, 2, 1, 3)
+            paths = paths.reshape(-1, self.path_size-1, self.input_edge_size)
+            paths = paths[:min(paths.shape[0], n_sampling_paths)]
+        return paths
+
     def unsup_train(self, paths, init=None):
         """Unsupervised training for path layer
         paths: n x path_size x input_size
         self.weight: path_size x hidden_size x input_size
         """
+
         # print(paths)
-        print(paths.shape)
+        # print(paths.shape)
         normalize_(paths, dim=-1)
         weight = spherical_kmeans(paths, self.hidden_size, init='kmeans++')
         weight = weight.permute(1, 0, 2)
@@ -185,6 +292,20 @@ class PathLayer(nn.Module):
 
         self.normalize_()
         self._need_lintrans_computed = True
+        self._need_lintrans_edges_computed = True
+    
+    def unsup_train_edges(self, paths, init=None):
+        """Unsupervised training for path layer
+        paths: n x path_size x input_size
+        self.weight: path_size x hidden_size x input_size
+        """
+        normalize_(paths, dim=-1)
+        weight = spherical_kmeans(paths, self.hidden_size, init='kmeans++')
+        weight = weight.permute(1, 0, 2)  # julien: this is very strange to me, why we need this (path representations are not contiguous into memory)
+        self.weight_edges.data.copy_(weight)
+        self.normalize_edges_()
+        self._need_lintrans_computed = True
+        self._need_lintrans_edges_computed = True
 
 
 class NodePooling(nn.Module):

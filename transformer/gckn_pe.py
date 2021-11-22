@@ -9,31 +9,51 @@ from gckn.models import PathSequential
 
 def compute_gckn_pe(train_graphs, test_graphs=None, path_size=3, hidden_size=32,
                     batch_size=64, sigma=0.5, pooling='mean',
-                    aggregation=True, normalize=False, use_cuda=False):
-    data_loader = PathLoader(train_graphs, path_size, batch_size, True)
+                    aggregation=True, normalize=False, use_cuda=False, encode_edges=False, dim_edges=0):
+    data_loader = PathLoader(train_graphs, path_size, batch_size, aggregation=aggregation, encode_edges=encode_edges)
     input_size = data_loader.input_size
+    input_edge_size = dim_edges
     data_loader.get_all_paths()
 
     model = PathSequential(input_size, [hidden_size], [path_size],
-        kernel_args_list=[sigma], pooling=pooling, aggregation=aggregation)
+        kernel_args_list=[sigma], pooling=pooling, aggregation=aggregation,
+        encode_edges=encode_edges, input_edge_size=input_edge_size)
 
     model.unsup_train(data_loader, n_sampling_paths=300000, use_cuda=use_cuda)
 
     scaler = None
     if normalize:
         from sklearn.preprocessing import StandardScaler
-        train_pe = model.encode(data_loader, use_cuda=use_cuda)
+        train_pe, train_pe_edges = model.encode(data_loader, use_cuda=use_cuda)
+
+        if train_pe_edges is not None:
+            n_nodes = [pe.shape[0] for pe in train_pe]
+            train_cat = torch.cat(train_pe, dim = 0)
+            train_cat_edges = torch.cat(train_pe_edges, dim=0)
+            train_pe = torch.cat((train_cat, train_cat_edges), dim=1)
+            train_pe = torch.split(train_pe, n_nodes)
+
         scaler = StandardScaler()
         scaler.fit(torch.cat(train_pe, dim=0).numpy())
         train_pe = [torch.from_numpy(
             scaler.transform(pe.numpy())) for pe in train_pe]
     else:
-        train_pe = model.encode(data_loader, use_cuda=use_cuda)
+        train_pe, train_pe_edges = model.encode(data_loader, use_cuda=use_cuda)
+        if train_pe_edges is not None:
+            train_pe = torch.cat((train_pe, train_pe_edges), dim=1)
 
     if test_graphs is not None:
-        data_loader = PathLoader(test_graphs, path_size, batch_size, True)
+        data_loader = PathLoader(test_graphs, path_size, batch_size, True, encode_edges = encode_edges)
         data_loader.get_all_paths()
-        test_pe = model.encode(data_loader, use_cuda=use_cuda)
+        test_pe, test_pe_edges = model.encode(data_loader, use_cuda=use_cuda)
+
+        if test_pe_edges is not None:
+            n_nodes = [pe.shape[0] for pe in test_pe]
+            test_cat = torch.cat(test_pe, dim = 0)
+            test_cat_edges = torch.cat(test_pe_edges, dim=0)
+            test_pe = torch.cat((test_cat, test_cat_edges), dim=1)
+            test_pe = torch.split(test_pe, n_nodes)
+
         if scaler is not None:
             test_pe = [torch.from_numpy(
                 scaler.transform(pe.numpy())) for pe in test_pe]
@@ -64,13 +84,19 @@ def convert_dataset(dataset, n_tags=None):
         degree_list = utils.degree(g.edge_index[0], g.num_nodes).numpy()
         new_g.max_neighbor = max(degree_list)
         new_g.mean_neighbor = (sum(degree_list) + len(degree_list) - 1) // len(degree_list)
+        
+        # testing to get edge_attr
+        if g.edge_attr is not None:
+            new_g.edge_features = g.edge_attr
+            new_g.edge_index = g.edge_index
+
         graph_list.append(new_g)
     return graph_list
 
 
 class GCKNEncoding(object):
     def __init__(self, savepath, dim, path_size, sigma=0.6, pooling='sum', aggregation=True,
-                 normalize=True):
+                 normalize=True, encode_edges=False, dim_edges=0):
         self.savepath = savepath
         self.dim = dim
         self.path_size = path_size
@@ -78,10 +104,18 @@ class GCKNEncoding(object):
         self.pooling = pooling
         self.aggregation = aggregation
         self.normalize = normalize
+        self.encode_edges = encode_edges
+        self.dim_edges = dim_edges
 
         self.pos_enc_dim = dim
         if aggregation:
             self.pos_enc_dim = path_size * dim
+        
+        if self.encode_edges:
+            if aggregation:
+                self.pos_enc_dim += (path_size-1) * dim
+            else:
+                self.pos_enc_dim += dim
 
     def apply_to(self, train_dset, test_dset=None, batch_size=64, n_tags=None):
         """take pytorch geometric dataest as input
@@ -97,7 +131,8 @@ class GCKNEncoding(object):
         pos_enc = compute_gckn_pe(
             train_dset, test_dset, path_size=self.path_size, hidden_size=self.dim,
             batch_size=batch_size, sigma=self.sigma, pooling=self.pooling,
-            aggregation=self.aggregation, normalize=self.normalize)
+            aggregation=self.aggregation, normalize=self.normalize,
+            encode_edges = self.encode_edges, dim_edges=self.dim_edges)
         self.save(pos_enc)
         return pos_enc
 
