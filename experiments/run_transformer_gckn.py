@@ -214,9 +214,9 @@ def main():
         val_dset = datasets.ZINC(data_path, subset=True, split='val')
         test_dset = datasets.ZINC(data_path, subset=True, split='test')
 
-    gckn_pos_enc_path = '../cache/pe/zinc_gckn_{}_{}_{}_{}_{}_{}.pkl'.format(
+    gckn_pos_enc_path = '../cache/pe/zinc_gckn_{}_{}_{}_{}_{}_{}_{}.pkl'.format(
         args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
-        args.gckn_agg, args.gckn_normalize)
+        args.gckn_agg, args.gckn_normalize, args.encode_edge)
     gckn_pos_encoder = GCKNEncoding(
         gckn_pos_enc_path, args.gckn_dim, args.gckn_path, args.gckn_sigma, args.gckn_pooling,
         args.gckn_agg, args.gckn_normalize, args.encode_edge, num_edge_classes)
