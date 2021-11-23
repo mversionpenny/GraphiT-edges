@@ -43,7 +43,7 @@ def compute_gckn_pe(train_graphs, test_graphs=None, path_size=3, hidden_size=32,
             train_pe = torch.cat((train_pe, train_pe_edges), dim=1)
 
     if test_graphs is not None:
-        data_loader = PathLoader(test_graphs, path_size, batch_size, True, encode_edges = encode_edges)
+        data_loader = PathLoader(test_graphs, path_size, batch_size, aggregation=aggregation, encode_edges = encode_edges)
         data_loader.get_all_paths()
         test_pe, test_pe_edges = model.encode(data_loader, use_cuda=use_cuda)
 

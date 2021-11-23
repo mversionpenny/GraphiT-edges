@@ -193,7 +193,7 @@ def get_path_indices(paths, n_paths_for_graph, n_nodes):
     paths = paths + incr_indices
     return paths
 
-def get_path_edges_indices_init(all_paths, edge_index, n_nodes):
+def get_path_edges_indices_init(all_paths, edge_index, n_nodes, aggr):
 
     paths_edges = []
 
@@ -224,11 +224,15 @@ def get_path_edges_indices_init(all_paths, edge_index, n_nodes):
     #### METHOD 3 ####
     values = torch.arange(edge_index.shape[1])
     matrix_of_edges_indexes = torch.sparse_coo_tensor(edge_index, values, (n_nodes, n_nodes)).to_dense().reshape(-1)
-    for k in range(1,len(all_paths)):
-        path_k = all_paths[k][:,0:-1]*n_nodes+all_paths[k][:,1:]  # perhaps need to convert here to LongTensor for large graphs
+    if aggr:
+        for k in range(1,len(all_paths)):
+            path_k = all_paths[k][:,0:-1]*n_nodes+all_paths[k][:,1:]  # perhaps need to convert here to LongTensor for large graphs
+            paths_edges_k = matrix_of_edges_indexes[path_k]
+            paths_edges.append(paths_edges_k.type(torch.LongTensor)) 
+    else: # in this case, all_paths is not a list but a tensor
+        path_k = all_paths[:,0:-1]*n_nodes+all_paths[:,1:]  # perhaps need to convert here to LongTensor for large graphs
         paths_edges_k = matrix_of_edges_indexes[path_k]
         paths_edges.append(paths_edges_k.type(torch.LongTensor)) 
-
     return paths_edges
 
 
@@ -300,7 +304,7 @@ class PathLoader(object):
                 if g.edge_features is not None:
                     all_edges.append(g.edge_index.type(torch.LongTensor))
                     edge_features.append(g.edge_features)
-                    tmp_paths_edges = get_path_edges_indices_init(all_paths[i], g.edge_index, n_nodes[i])
+                    tmp_paths_edges = get_path_edges_indices_init(all_paths[i], g.edge_index, n_nodes[i], self.aggregation)
                     paths_edges.append(tmp_paths_edges)
             labels[i] = g.label
         edges_string_path = ''
@@ -333,6 +337,7 @@ class PathLoader(object):
         self.labels = labels
 
     def make_batch(self, shuffle=True):
+        print("hello")
         if self.data is None:
             ####### CHUNK THAT IS NEVER USED ########
             # raise ValueError('Plase first run self.get_all_paths() to compute paths!')
@@ -398,7 +403,7 @@ class PathLoader(object):
                     current_n_paths = torch.cat(current_n_paths)
                 if self.encode_edges:
                     current_edges = current_paths[1]
-                    current_paths_edges = get_path_edges_indices_init(current_paths, current_edges, current_n_nodes.shape[0])
+                    current_paths_edges = get_path_edges_indices_init(current_paths, current_edges, current_n_nodes.shape[0], self.aggregation)
                     yield {'features': current_features,
                        'paths': current_paths,
                        'n_paths': current_n_paths,
@@ -458,8 +463,8 @@ class PathLoader(object):
                 if self.encode_edges:
                     current_edges = current_paths[1]
                     # we take k-1 because when path_size = 1, we don''t have edges
-                    current_paths_edges = [torch.cat([self.data['paths_edges'][i][j] for i in idx]) for j in range(self.k-1)]
-                    current_paths_edges = get_path_indices(current_paths_edges, current_n_paths_for_graph[:,-1], current_n_edges)
+                    current_paths_edges = torch.cat([self.data['paths_edges'][i][0] for i in idx])
+                    current_paths_edges = get_path_indices(current_paths_edges, current_n_paths_for_graph, current_n_edges)
             if self.encode_edges:
                 yield {'features': current_features,
                    'paths': current_paths,

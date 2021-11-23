@@ -44,7 +44,6 @@ class PathConv(torch.autograd.Function):
 
 def path_conv(path_indices, features, edges_info):
     import torch.nn.functional as F
-
     path_indices_margot = path_indices * features.shape[1] + torch.arange(path_indices.shape[1])
     features_margot = features.permute(2,0,1).view(features.shape[2],-1).t()
     
@@ -72,8 +71,8 @@ def path_conv(path_indices, features, edges_info):
         output_margot_edges = F.embedding(path_indices_margot_edges, features_margot_edges).permute(0,2,1)
         output_margot_edges = output_margot_edges.mean(dim=-1)
 
-        output_edges_2d = F.embedding(edges_info['paths_edges'].type(torch.LongTensor), edges_info['edge_features_todel'].view(edges_info['edge_features'].shape[0], -1))
-        output_edges = output_edges_2d.permute(0,2,1).type(torch.FloatTensor).mean(dim=-1)
+        # output_edges_2d = F.embedding(edges_info['paths_edges'].type(torch.LongTensor), edges_info['edge_features_todel'].view(edges_info['edge_features'].shape[0], -1))
+        # output_edges = output_edges_2d.permute(0,2,1).type(torch.FloatTensor).mean(dim=-1)
     
     # return output, output_edges
     return output_margot, output_margot_edges

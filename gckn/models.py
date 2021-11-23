@@ -67,8 +67,8 @@ class PathSequential(nn.Module):
         if n == -1:
             n = self.n_layers
         for i in range(n):
-            features = self.layers[i](features, paths_indices, other_info, edges_info)
-        return features
+            features, features_edges = self.layers[i](features, paths_indices, other_info, edges_info)
+        return features, features_edges
 
     def normalize_(self):
         for module in self.layers:
@@ -184,6 +184,7 @@ class PathSequential(nn.Module):
                     n_paths = n_paths.cuda()
                 n_nodes = n_nodes.cuda()
             with torch.no_grad():
+                
                 batch_out, batch_out_edges = self(features, paths_indices,
                                  {'n_paths': n_paths,
                                   'n_nodes': n_nodes},

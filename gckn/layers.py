@@ -176,7 +176,6 @@ class PathLayer(nn.Module):
                     else:
                         edges_info_send={'edges': edges_info['edges'], 'edge_features': output_edges, 
                         'edge_features_todel': edges_info['edge_features'], 'paths_edges': edges_info['paths_edges'][i-1]}
-                
                 embeded, embeded_edges = path_conv_agg(
                     output, paths_indices[i], other_info['n_paths'][i],
                     self.pooling, self.kappa, self.d_kappa, mask[i], edges_info_send)
@@ -198,10 +197,11 @@ class PathLayer(nn.Module):
         else:
             edges_info_send = None
             if self.encode_edges:
-                    edges_info_send={'edges': edges_info['edges'], 'edge_features': edges_info['edge_features'], 'paths_edges': edges_info['paths_edges'][-1]}
+                    edges_info_send={'edges': edges_info['edges'], 'edge_features': output_edges, 
+                        'edge_features_todel': edges_info['edge_features'], 'paths_edges': edges_info['paths_edges']}
             output, output_edges = path_conv_agg(
-                output, paths_indices[self.path_size - 1],
-                other_info['n_paths'][self.path_size - 1],
+                output, paths_indices,
+                other_info['n_paths'],
                 self.pooling, self.kappa, self.d_kappa, mask, edges_info_send)
             # output: n_nodes x ((input_path_size) x hidden_size)
             output = output.view(n_nodes, -1, output.shape[1])
