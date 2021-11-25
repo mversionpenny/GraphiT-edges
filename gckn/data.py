@@ -337,7 +337,6 @@ class PathLoader(object):
         self.labels = labels
 
     def make_batch(self, shuffle=True):
-        print("hello")
         if self.data is None:
             ####### CHUNK THAT IS NEVER USED ########
             # raise ValueError('Plase first run self.get_all_paths() to compute paths!')
