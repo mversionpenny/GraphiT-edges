@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 import torch_geometric.utils as utils
 from gckn.data import PathLoader, S2VGraph
+from transformer.data import atom_one_hot
 from gckn.models import PathSequential
 
 
@@ -78,7 +79,8 @@ def convert_dataset(dataset, n_tags=None):
         new_g = S2VGraph(g, g.y)
         new_g.neighbors = get_adj_list(g)
         if n_tags is not None:
-            new_g.node_features = F.one_hot(g.x.view(-1).long(), n_tags).numpy()
+            # new_g.node_features = F.one_hot(g.x.view(-1).long(), n_tags).numpy()
+             new_g.node_features = atom_one_hot(g.x, n_tags).numpy()
         else:
             new_g.node_features = g.x.numpy()
         degree_list = utils.degree(g.edge_index[0], g.num_nodes).numpy()
@@ -149,6 +151,8 @@ class GCKNEncoding(object):
         with open(self.savepath, 'rb') as handle:
             pos_enc = pickle.load(handle)
         return pos_enc
+
+		
 
 
 if __name__ == "__main__":

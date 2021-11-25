@@ -1,11 +1,11 @@
 intro="source gpu_setVisibleDevices.sh; source /scratch/prospero/mselosse/miniconda3/bin/activate tb;"
-cmd="cd /scratch/prospero/mselosse/GraphiT-edges; export PYTHONPATH='/scratch/prospero/mselosse/GraphiT-edges'; cd experiments; python run_transformer_gckn.py"
+cmd="cd /scratch/prospero/mselosse/GraphiT-edges; export PYTHONPATH='/scratch/prospero/mselosse/GraphiT-edges'; cd experiments; python run_transformer_molhiv_gckn.py"
 epochs=500
 #pos_enc="pstep"
-#pos_enc="diffusion"
-pos_enc="None"
+pos_enc="diffusion"
+#pos_enc="None"
 #normalization="sym" #"sym"
-normalization="None"
+normalization="sym"
 gckn_dims="32"
 gckn_paths="8"
 gckn_sigmas="0.6"
@@ -15,7 +15,7 @@ betas="1.0"
 nb_heads=8
 nb_layers=4
 dim_hidden=128
-lr=0.001
+lr=0.0001
 seeds="0"
 
 
@@ -30,12 +30,14 @@ done
 
 echo "encode -e : $encode_e"
 if [ $encode_e = 'e' ]; then
-	encode_edge='--encode-edge' #'--encode-edge'
+	encode_edge='--encode-edge' 
+    path_edge='True'
 	outdir=/scratch/prospero/mselosse/results-transfo-edges
 	logs_out="/scratch/prospero/mselosse/results-transfo-edges/logs/%jobid%.stdout"
 	logs_err="/scratch/prospero/mselosse/results-transfo-edges/logs/%jobid%.stderr"
 elif [ $encode_e = 'ne' ]; then
 	encode_edge=''
+    path_edge='False'
 	outdir=/scratch/prospero/mselosse/results-transfo-noedges
 	logs_out="/scratch/prospero/mselosse/results-transfo-noedges/logs/%jobid%.stdout"
 	logs_err="/scratch/prospero/mselosse/results-transfo-noedges/logs/%jobid%.stderr"
@@ -61,9 +63,9 @@ for beta in $betas; do
     for seed in $seeds; do
         params="${lr}_${nb_layers}_${nb_heads}_${dim_hidden}_LN_${pos_enc}_${normalization}_${p}_${beta}"
 	
-        echo "${outdir}/transformer/ZINC/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True/${params}/results.csv"
+        echo "${outdir}/transformer/molhiv/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv"
         #params="${lr}_${nb_layers}_${nb_heads}_${dim_hidden}_BN_${pos_enc}_${normalization}_${p}_${beta}"
-        if [ ! -f ${outdir}/transformer/ZINC/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True/${params}/results.csv ]; then
+        if [ ! -f ${outdir}/transformer/molhiv/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True/${params}/results.csv ]; then
             startjob "${params}" "--gckn-path ${gckn_path} --gckn-dim ${gckn_dim} --gckn-pooling ${gckn_pooling} --outdir ${outdir} --seed ${seed} --epochs ${epochs} --nb-heads ${nb_heads} --nb-layers ${nb_layers} --dim-hidden ${dim_hidden} --lr ${lr} ${encode_edge}"
         fi
     done

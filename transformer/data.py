@@ -13,6 +13,7 @@ class GraphDataset(object):
         self.n_features = dataset[0].x.shape[-1]
         self.pe_list = None
         self.lap_pe_list = None
+        self.lap_pe_dim = None
         self.degree_list = None
         if degree:
             self.compute_degree()
@@ -40,17 +41,20 @@ class GraphDataset(object):
             deg = 1. / torch.sqrt(1. + utils.degree(g.edge_index[0], g.num_nodes))
             self.degree_list.append(deg)
 
-    def input_size(self):
-        if self.n_tags is None:
-            return self.n_features
-        return self.n_tags
+    def input_size(self):	
+        if self.n_tags is None:	
+            return self.n_features	
+        if isinstance(self.n_tags, int):	
+            return self.n_tags	
+        return sum(self.n_tags)
 
     def one_hot(self):
         self.x_onehot = None
-        if self.n_tags is not None and self.n_tags > 1:
+        if self.n_tags is not None: #and self.n_tags > 1:
             self.x_onehot = []
             for g in self.dataset:
-                onehot = F.one_hot(g.x.view(-1).long(), self.n_tags)
+                # onehot = F.one_hot(g.x.view(-1).long(), self.n_tags)
+                onehot = atom_one_hot(g.x, self.n_tags)
                 self.x_onehot.append(onehot)
 
     def collate_fn(self):
@@ -58,11 +62,7 @@ class GraphDataset(object):
             batch = list(batch)
             max_len = max(len(g.x) for g in batch)
 
-            if self.n_tags is None:
-                padded_x = torch.zeros((len(batch), max_len, self.n_features))
-            else:
-                # discrete node attributes
-                padded_x = torch.zeros((len(batch), max_len, self.n_tags))
+            padded_x = torch.zeros((len(batch), max_len, self.input_size()))
             mask = torch.zeros((len(batch), max_len), dtype=bool)
             labels = []
 
@@ -72,6 +72,7 @@ class GraphDataset(object):
             pos_enc = None
             use_pe = hasattr(batch[0], 'pe') and batch[0].pe is not None
             if use_pe:
+                print("We might have a problem here")
                 if not batch[0].pe.is_sparse:
                     pos_enc = torch.zeros((len(batch), max_len, max_len))
                 else:
@@ -81,8 +82,8 @@ class GraphDataset(object):
             lap_pos_enc = None
             use_lap_pe = hasattr(batch[0], 'lap_pe') and batch[0].lap_pe is not None
             if use_lap_pe:
-                lap_pe_dim = batch[0].lap_pe.shape[-1]
-                lap_pos_enc = torch.zeros((len(batch), max_len, lap_pe_dim))
+                # lap_pe_dim = batch[0].lap_pe.shape[-1]
+                lap_pos_enc = torch.zeros((len(batch), max_len, self.lap_pe_dim))
 
             degree = None
             use_degree = hasattr(batch[0], 'degree') and batch[0].degree is not None
@@ -90,7 +91,7 @@ class GraphDataset(object):
                 degree = torch.zeros((len(batch), max_len))
 
             for i, g in enumerate(batch):
-                labels.append(g.y)
+                labels.append(g.y.view(-1))
                 g_len = len(g.x)
 
                 if self.n_tags is None:
@@ -99,6 +100,7 @@ class GraphDataset(object):
                     padded_x[i, :g_len, :] = g.x_onehot
                 mask[i, g_len:] = True
                 if use_pe:
+                    print("We might have a problem here too")
                     pos_enc[i, :g_len, :g_len] = g.pe
                 if use_lap_pe:
                     lap_pos_enc[i, :g_len, :g.lap_pe.shape[-1]] = g.lap_pe
@@ -117,3 +119,13 @@ class OneHotEdges(object):
     def __call__(self, data):
         data.edge_attr = F.one_hot(data.edge_attr.long()-1, self.num_edge_classes) 
         return data
+
+def atom_one_hot(nodes, num_atom_types):	
+    if isinstance(num_atom_types, int):	
+        return F.one_hot(nodes.view(-1).long(), num_atom_types)	
+    all_one_hot_feat = []	
+    for col in range(len(num_atom_types)):	
+        one_hot_feat = F.one_hot(nodes[:, col], num_atom_types[col])	
+        all_one_hot_feat.append(one_hot_feat)	
+    all_one_hot_feat = torch.cat(all_one_hot_feat, dim=1)	
+    return all_one_hot_feat
