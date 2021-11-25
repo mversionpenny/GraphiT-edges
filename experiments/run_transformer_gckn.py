@@ -60,8 +60,8 @@ def load_args():
     parser.add_argument('--warmup', type=int, default=2000)
     parser.add_argument('--layer-norm', action='store_true', help='use layer norm instead of batch norm')
     parser.add_argument('--zero-diag', action='store_true', help='zero diagonal for PE matrix')
-    parser.add_argument('--encode-edge', action='store_true',
-                        help='if true then we encode the edges')
+    parser.add_argument('--encode-edge', action='store_true', help='if true then we encode the edges')
+    parser.add_argument('--weight-decay', default=0.01, type=float, help='weight decay')
     args = parser.parse_args()
     args.use_cuda = torch.cuda.is_available()
     args.batch_norm = not args.layer_norm
@@ -103,9 +103,9 @@ def load_args():
             except Exception:
                 pass
         bn = 'BN' if args.batch_norm else 'LN'
-        outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
+        outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
             args.lr, args.nb_layers, args.nb_heads, args.dim_hidden, bn,
-            args.pos_enc, args.normalization, args.p, args.beta
+            args.pos_enc, args.normalization, args.p, args.beta, args.weight_decay
         )
         if not os.path.exists(outdir):
             try:
