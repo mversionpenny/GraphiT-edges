@@ -7,11 +7,11 @@
 #SBATCH --cpus-per-task=10
 #SBATCH --hint=nomultithread
 #SBATCH --time=10:00:00
-#SBATCH --output=scripts/logs/%j.out      # nom du fichier de sortie
-#SBATCH --error=scripts/logs/%j.out       # nom du fichier d'erreur
+#SBATCH --output=scripts-servers/logs/%j.out      # nom du fichier de sortie
+#SBATCH --error=scripts-servers/logs/%j.out       # nom du fichier d'erreur
 
 
-export PYTHONPATH=${WORK}/GOTK
+export PYTHONPATH=${WORK}/GraphiT-edges
 echo $PYTHONPATH
 
 
@@ -30,4 +30,4 @@ args=$1
 
 echo "$args"
 
-python -u $WORK/GOTK/experiments/run_transformer_gckn.py $args
+python -u $WORK/GraphiT-edges/experiments/run_transformer_gckn.py $args
