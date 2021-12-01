@@ -76,10 +76,10 @@ for gckn_sigma in $gckn_sigmas; do
 
 			params="${lr}_${nb_layer}_${nb_heads}_${dim_hidden}_BN_${pos_enc}_${normalization}_${p}_${beta}_${wd}_${dropout}"			
 			if [ ! -f ${outdir}${seed}/transformer/ZINC/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True__${path_edge}/${params}/results.csv ]; then					
-			args="--outdir ${outdir}${seed} --seed ${seed} --epochs ${epochs} 
-            --p ${p} --beta ${beta}
-            --gckn-dim ${gckn_dim} --gckn-path ${gckn_path} --gckn-sigma ${gckn_sigma} --gckn-pooling ${gckn_pooling} 
-            --nb-heads ${nb_heads} --nb-layers ${nb_layer} --dim-hidden ${dim_hidden} --lr ${lr} --weight-decay ${wd} --dropout ${dropout}
+			args="--outdir ${outdir}${seed} --seed ${seed} --epochs ${epochs} \
+            --p ${p} --beta ${beta} \
+            --gckn-dim ${gckn_dim} --gckn-path ${gckn_path} --gckn-sigma ${gckn_sigma} --gckn-pooling ${gckn_pooling} \
+            --nb-heads ${nb_heads} --nb-layers ${nb_layer} --dim-hidden ${dim_hidden} --lr ${lr} --weight-decay ${wd} --dropout ${dropout} \
             --warmup 2000 --use-edge-attr ${encode_edge}"  
 			sendjob "$args"
 			fi
