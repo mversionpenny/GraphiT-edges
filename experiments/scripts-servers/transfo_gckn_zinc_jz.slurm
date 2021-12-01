@@ -11,6 +11,7 @@
 #SBATCH --error=/gpfsscratch/rech/tbr/uho58uo/logs/%j.out       # nom du fichier d'erreur
 
 
+
 export PYTHONPATH=${WORK}/GraphiT-edges
 echo $PYTHONPATH
 

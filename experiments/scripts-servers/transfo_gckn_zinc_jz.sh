@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 sendjob(){
         max_jobs=150
         counter=`squeue -u $USER | wc -l`
