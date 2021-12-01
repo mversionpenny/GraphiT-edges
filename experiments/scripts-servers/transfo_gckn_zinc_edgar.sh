@@ -13,10 +13,11 @@ gckn_pooling="sum"
 p=1
 betas="1.0"
 nb_heads=8
-nb_layers=4
+nb_layers=10
 dim_hidden="128"
-lr=0.001
-seeds="0"
+lr=0.0001
+weight_decay=0.01
+seeds="0 1 2 3"
 
 
 
@@ -61,15 +62,14 @@ for gckn_dim in $gckn_dims; do
 for gckn_sigma in $gckn_sigmas; do
 for beta in $betas; do
     for seed in $seeds; do
-        params="${lr}_${nb_layers}_${nb_heads}_${dim_hidden}_LN_${pos_enc}_${normalization}_${p}_${beta}"
+        params="${lr}_${nb_layers}_${nb_heads}_${dim_hidden}_LN_${pos_enc}_${normalization}_${p}_${beta}_${weight_decay}"
 	
-        echo "${outdir}/transformer/ZINC/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv"
-        #params="${lr}_${nb_layers}_${nb_heads}_${dim_hidden}_BN_${pos_enc}_${normalization}_${p}_${beta}"
-        if [ ! -f ${outdir}/transformer/ZINC/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True/${params}/results.csv ]; then
+        echo "${outdir}${seed}/transformer/ZINC/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv"
+        if [ ! -f ${outdir}${seed}/transformer/ZINC/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv ]; then
             startjob "${params}" "--gckn-path ${gckn_path} --gckn-dim ${gckn_dim} --gckn-pooling ${gckn_pooling} 
-            --outdir ${outdir} --seed ${seed} --epochs ${epochs} --pos_enc ${pos_enc} --beta ${beta} --p ${p}
-            --nb-heads ${nb_heads} --nb-layers ${nb_layers} --dim-hidden ${dim_hidden} --lr ${lr} 
-            ${encode_edge}"
+            --outdir ${outdir}${seed} --seed ${seed} --epochs ${epochs} --pos_enc ${pos_enc} --beta ${beta} --p ${p}
+            --nb-heads ${nb_heads} --nb-layers ${nb_layers} --dim-hidden ${dim_hidden} --lr ${lr} --weight-decay ${weight_decay}
+            ${encode_edge} --warmup 2000"
         fi
     done
 done

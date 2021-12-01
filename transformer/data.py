@@ -72,9 +72,13 @@ class GraphDataset(object):
             pos_enc = None
             use_pe = hasattr(batch[0], 'pe') and batch[0].pe is not None
             if use_pe:
-                print("We might have a problem here")
+                #print("We might have a problem here")
                 if not batch[0].pe.is_sparse:
-                    pos_enc = torch.zeros((len(batch), max_len, max_len))
+                    if batch[0].pe.ndim == 2:
+                        pos_enc = torch.zeros((len(batch), max_len, max_len))
+                    else:
+                        pos_enc = torch.zeros((
+                            len(batch), batch[0].pe.shape[0], max_len, max_len))
                 else:
                     print("Not implemented yet!")
 
@@ -100,8 +104,10 @@ class GraphDataset(object):
                     padded_x[i, :g_len, :] = g.x_onehot
                 mask[i, g_len:] = True
                 if use_pe:
-                    print("We might have a problem here too")
-                    pos_enc[i, :g_len, :g_len] = g.pe
+                    if g.pe.ndim == 2:
+                        pos_enc[i, :g_len, :g_len] = g.pe
+                    else:
+                        pos_enc[i, :, :g_len, :g_len] = g.pe
                 if use_lap_pe:
                     lap_pos_enc[i, :g_len, :g.lap_pe.shape[-1]] = g.lap_pe
                 if use_degree:

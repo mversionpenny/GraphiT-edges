@@ -67,7 +67,8 @@ class DiffGraphTransformer(nn.Module):
     # pos encoding rather than Vaswani et al.
     def __init__(self, in_size, nb_class, d_model, nb_heads,
                  dim_feedforward=2048, dropout=0.1, nb_layers=4,
-                 batch_norm=False, lap_pos_enc=False, lap_pos_enc_dim=0):
+                 batch_norm=False, lap_pos_enc=False, lap_pos_enc_dim=0,
+                 use_edge_attr=False, num_edge_features=0):
         super(DiffGraphTransformer, self).__init__()
 
         self.lap_pos_enc = lap_pos_enc
@@ -90,7 +91,19 @@ class DiffGraphTransformer(nn.Module):
             nn.Linear(d_model, nb_class)
             )
 
+        self.use_edge_attr = use_edge_attr
+        if use_edge_attr:
+            # self.ref = nn.Parameter(torch.zeros((max_num_nodes, max_num_nodes)))
+            self.coef = nn.Parameter(torch.ones(num_edge_features) / num_edge_features)
+            # self.sum_pooling = GlobalSum1D()
+            
     def forward(self, x, masks, pe, x_lap_pos_enc=None, degree=None):
+        if self.use_edge_attr and pe.ndim == 4:
+            with torch.no_grad():
+                coef = self.coef.data.clamp(min=0)
+                coef /= coef.sum(dim=0, keepdim=True)
+                self.coef.data.copy_(coef)
+            pe = torch.tensordot(self.coef, pe, dims=[[0], [1]])
         # We permute the batch and sequence following pytorch
         # Transformer convention
         x = x.permute(1, 0, 2)
