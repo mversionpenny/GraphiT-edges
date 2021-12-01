@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=10
 #SBATCH --hint=nomultithread
 #SBATCH --time=10:00:00
-#SBATCH --output=scripts-servers/logs/%j.out      # nom du fichier de sortie
-#SBATCH --error=scripts-servers/logs/%j.out       # nom du fichier d'erreur
+#SBATCH --output=/gpfsscratch/rech/tbr/uho58uo/logs/%j.out      # nom du fichier de sortie
+#SBATCH --error=/gpfsscratch/rech/tbr/uho58uo/logs/%j.out       # nom du fichier d'erreur
 
 
 export PYTHONPATH=${WORK}/GraphiT-edges
