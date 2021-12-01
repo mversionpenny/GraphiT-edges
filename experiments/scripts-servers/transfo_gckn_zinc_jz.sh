@@ -14,6 +14,12 @@ sendjob(){
 }
 
 
+while getopts e: flag
+do
+    case "${flag}" in
+        e) encode_e=${OPTARG};;
+    esac
+done
 echo "encode -e : $encode_e"
 if [ $encode_e = 'e' ]; then
 	encode_edge='--encode-edge' 
