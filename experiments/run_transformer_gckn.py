@@ -33,7 +33,7 @@ def load_args():
     parser.add_argument('--dataset', type=str, default="ZINC",
                         help='name of dataset')
     parser.add_argument('--nb-heads', type=int, default=8)
-    parser.add_argument('--nb-layers', type=int, default=10)
+    parser.add_argument('--nb-layers', type=int, default=5)
     parser.add_argument('--dim-hidden', type=int, default=64)
     parser.add_argument('--pos-enc', choices=[None,
                         'diffusion', 'pstep', 'adj'], default=None)
@@ -122,6 +122,7 @@ def load_args():
             try:
                 os.makedirs(outdir)
             except Exception:
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR")
                 pass
         args.outdir = outdir
     return args

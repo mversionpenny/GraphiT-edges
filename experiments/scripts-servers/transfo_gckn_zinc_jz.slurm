@@ -22,7 +22,6 @@ module purge
 module load pytorch-gpu/py3/1.6.0
 
 cd $PYTHONPATH
-make
 
 cd experiments
 

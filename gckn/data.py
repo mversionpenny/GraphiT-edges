@@ -278,7 +278,6 @@ class PathLoader(object):
             if self.walk:
                 p, c = get_walks(g, self.k)
             else:
-                print(i)
                 p, c = get_paths(g, self.k)
                 # p is a list of length k, such that lth element  contains the paths of length lth
                 # c is an array of size n_nodes x k such that cell (i,j) counts the number of
