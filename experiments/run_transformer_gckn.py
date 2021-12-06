@@ -75,33 +75,43 @@ def load_args():
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 1")
                 pass
         outdir = outdir + '/transformer'
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 2")
                 pass
         outdir = outdir + '/{}'.format(args.dataset)
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 3")
                 pass
         if args.zero_diag:
             outdir = outdir + '/zero_diag'
             if not os.path.exists(outdir):
                 try:
                     os.makedirs(outdir)
-                except Exception:
+                except Exception as e:
+                    print(e)
+                    print("/!\ THERE IS A PROBLEM WITH OUTDIR 4")
                     pass
         if args.use_edge_attr:
             outdir = outdir + '/edge_attr'
             if not os.path.exists(outdir):
                 try:
                     os.makedirs(outdir)
-                except Exception:
+                except Exception as e:
+                    print(e)
+                    print("/!\ THERE IS A PROBLEM WITH OUTDIR 5")
                     pass
         lapdir = 'gckn_{}_{}_{}_{}_{}_{}_{}'.format(args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
             args.gckn_agg, args.gckn_normalize, args.encode_edge) 
@@ -110,7 +120,9 @@ def load_args():
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 6")
                 pass
         bn = 'BN' if args.batch_norm else 'LN'
         outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
@@ -121,8 +133,9 @@ def load_args():
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR")
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 7")
                 pass
         args.outdir = outdir
     return args
@@ -214,7 +227,7 @@ def main():
     data_path = '../dataset/ZINC'
     # number of node attributes for ZINC dataset
     n_tags = 28
-    if args.encode_edge:
+    if args.encode_edge or args.use_edge_attr:
         num_edge_features = 3
         train_dset = datasets.ZINC(data_path, subset=True, split='train', transform=OneHotEdges(num_edge_features))
         val_dset = datasets.ZINC(data_path, subset=True, split='val', transform=OneHotEdges(num_edge_features))
