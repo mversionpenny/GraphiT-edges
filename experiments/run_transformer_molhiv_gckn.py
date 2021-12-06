@@ -250,18 +250,18 @@ def main():
         if args.pos_enc == 'diffusion':
             pos_encoding_params = {
                 'beta': args.beta,
-                'encode_edge': args.encode_edge,
+                'use_edge_attr': args.use_edge_attr,
                 'num_edge_features': num_edge_features
             }
-            pos_encoding_params_str = "{}_{}".format(args.beta, args.encode_edge)
+            pos_encoding_params_str = "{}_{}".format(args.beta, args.use_edge_attr)
         elif args.pos_enc == 'pstep':
             pos_encoding_params = {
                 'beta': args.beta,
                 'p': args.p,
-                'encode_edge': args.encode_edge,
+                'use_edge_attr': args.use_edge_attr,
                 'num_edge_features': num_edge_features
             }
-            pos_encoding_params_str = "{}_{}_{}".format(args.p, args.beta, args.encode_edge)
+            pos_encoding_params_str = "{}_{}_{}".format(args.p, args.beta, args.use_edge_attr)
         else:
             pos_encoding_params = {}
 
@@ -295,9 +295,9 @@ def main():
                                      nb_layers=args.nb_layers,
                                      batch_norm=args.batch_norm,
                                      lap_pos_enc=True,
-                                     lap_pos_enc_dim=gckn_dim
-                                    #  use_edge_attr=args.use_edge_attr,
-                                    #  num_edge_features=sum(num_edge_features)
+                                     lap_pos_enc_dim=gckn_dim,
+                                     use_edge_attr=args.use_edge_attr,
+                                     num_edge_features=num_edge_features
                                     )
     else:
         model = GraphTransformer(in_size=input_size,

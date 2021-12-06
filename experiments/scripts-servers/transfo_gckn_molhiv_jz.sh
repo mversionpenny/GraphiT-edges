@@ -9,7 +9,7 @@ sendjob(){
                 counter=`squeue -u $USER | wc -l`
                 echo $counter
         done
-        sbatch $WORK/GraphiT-edges/experiments/scripts-servers/transfo_gckn_zinc_jz.slurm "$1"
+        sbatch $WORK/GraphiT-edges/experiments/scripts-servers/transfo_gckn_molhiv_jz.slurm "$1"
 }
 
 
@@ -21,7 +21,7 @@ do
     esac
 done
 
-outdir=$WORK/results-transfo-gckn-zinc/seed
+outdir=$WORK/results-transfo-gckn-molhiv/seed
 
 echo "encode -e : $encode_e"
 if [ $encode_e = 'e' ]; then
@@ -53,8 +53,8 @@ echo "outdir = $outdir"
 
 
 
-dataset='ZINC'
-epochs=500
+dataset='molhiv'
+epochs=150
 seeds="0 1 2 3"
 
 pos_enc="diffusion"
