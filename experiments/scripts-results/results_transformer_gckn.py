@@ -47,6 +47,7 @@ def main():
     best_val_path = ''
     test_mae_list = []
     for seed in seed_grid:
+        best_val_mae = 1000
         for beta in beta_grid:
             for p in p_grid:
                 for nb_layers in nb_layers_grid:
@@ -54,7 +55,7 @@ def main():
                         for lr in lr_list:
                             for wd in wd_list:
                                 for drp in drp_list:
-                                    best_val_mae = 1000
+                                    
                                     path = path_base + '{}/transformer/ZINC/gckn_{}_{}_{}_{}_{}_{}_{}/'.format(
                                         seed, gckn_path, gckn_dim, gckn_sigma, gckn_pooling, True, True, encode_edge
                                     ) + '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}/'.format(
@@ -71,10 +72,10 @@ def main():
                                     else:
                                         print(path, ' not found.')
 
-                                    print("*******", best_val_path, "*******")                          
-                                    best_val_df = pd.read_csv(best_val_path)
-                                    test_mae = best_val_df.loc[best_val_df['name'] == 'test_mae', 'value'].iloc[0]
-                                    test_mae_list.append(test_mae)
+            print("*******", best_val_path, "*******")                          
+            best_val_df = pd.read_csv(best_val_path)
+            test_mae = best_val_df.loc[best_val_df['name'] == 'test_mae', 'value'].iloc[0]
+            test_mae_list.append(test_mae)
     print(test_mae_list)
     print("mean: ", mean(test_mae_list))
     print("stdev: ", stdev(test_mae_list))
