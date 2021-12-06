@@ -126,6 +126,21 @@ class OneHotEdges(object):
         data.edge_attr = F.one_hot(data.edge_attr.long()-1, self.num_edge_classes) 
         return data
 
+class OneHotEdgesMult(object):
+    def __init__(self, num_edge_features):
+        self.num_edge_features = num_edge_features
+
+    def __call__(self, data):
+        all_one_hot_feat = []
+        for col in range(len(self.num_edge_features)):
+            one_hot_feat = F.one_hot(data.edge_attr[:, col].long(), self.num_edge_features[col])
+            all_one_hot_feat.append(one_hot_feat)
+        all_one_hot_feat = torch.cat(all_one_hot_feat, dim=1)
+        data.edge_attr = all_one_hot_feat.float()
+        return data
+
+
+
 def atom_one_hot(nodes, num_atom_types):	
     if isinstance(num_atom_types, int):	
         return F.one_hot(nodes.view(-1).long(), num_atom_types)	

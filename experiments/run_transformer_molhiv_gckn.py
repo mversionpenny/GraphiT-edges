@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch_geometric import datasets
 from transformer.models import DiffGraphTransformer, GraphTransformer
-from transformer.data import GraphDataset
+from transformer.data import GraphDataset, OneHotEdgesMult
 from transformer.position_encoding import LapEncoding, FullEncoding, POSENCODINGS
 from transformer.gckn_pe import GCKNEncoding
 from transformer.utils import count_parameters
@@ -220,9 +220,11 @@ def main():
     num_edge_features = get_bond_feature_dims()
 
     
-    dataset = PygGraphPropPredDataset(name='ogbg-molhiv', root=data_path)
+    if args.encode_edge or args.use_edge_attr:
+        dataset = PygGraphPropPredDataset(name='ogbg-molhiv', root=data_path, transform=OneHotEdgesMult(num_edge_features))
+    else:
+        dataset = PygGraphPropPredDataset(name='ogbg-molhiv', root=data_path)
 
-   
     split_idx = dataset.get_idx_split()
     train_dset = dataset[split_idx['train']]
     val_dset = dataset[split_idx['valid']]
