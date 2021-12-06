@@ -73,6 +73,7 @@ wds="0.001 0.0001"
 dropouts="0.0 0.3"
 
 
+
 echo "/!\  ps are $ps, beta are $betas and pos_enc is $pos_enc"
 
 for seed in $seeds; do
