@@ -28,7 +28,7 @@ def main():
 
     
     bn='BN'
-    beta_grid = [0.5, 0.6]
+    beta_grid = [0.5] #[0.5, 0.6] #[0.5]
     p_grid = [1]
     normalization='sym'
     pos_enc='None'
@@ -38,7 +38,7 @@ def main():
     lr_list=[0.001, 0.0001, 0.00001]
     wd_list=[0.001, 0.0001]
     drp_list=[0.0, 0.3]
-    encode_edge= True
+    encode_edge=True
     
     
 
@@ -56,7 +56,7 @@ def main():
                             for wd in wd_list:
                                 for drp in drp_list:
                                     
-                                    path = path_base + '{}/transformer/ZINC/gckn_{}_{}_{}_{}_{}_{}_{}/'.format(
+                                    path = path_base + '{}/transformer/ZINC/edge_attr/gckn_{}_{}_{}_{}_{}_{}_{}/'.format(
                                         seed, gckn_path, gckn_dim, gckn_sigma, gckn_pooling, True, True, encode_edge
                                     ) + '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}/'.format(
                                         lr, nb_layers, nb_heads, dim_hidden, bn, pos_enc, normalization, p, beta,
@@ -72,10 +72,10 @@ def main():
                                     else:
                                         print(path, ' not found.')
 
-            print("*******", best_val_path, "*******")                          
-            best_val_df = pd.read_csv(best_val_path)
-            test_mae = best_val_df.loc[best_val_df['name'] == 'test_mae', 'value'].iloc[0]
-            test_mae_list.append(test_mae)
+        print("*******", best_val_path, "*******")                          
+        best_val_df = pd.read_csv(best_val_path)
+        test_mae = best_val_df.loc[best_val_df['name'] == 'test_mae', 'value'].iloc[0]
+        test_mae_list.append(test_mae)
     print(test_mae_list)
     print("mean: ", mean(test_mae_list))
     print("stdev: ", stdev(test_mae_list))
