@@ -12,17 +12,16 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch_geometric import datasets
 from transformer.models import DiffGraphTransformer, GraphTransformer
-from transformer.data import GraphDataset, OneHotEdges
-from transformer.position_encoding import FullEncoding, LapEncoding, POSENCODINGS
+from transformer.data import GraphDataset, OneHotEdgesMult
+from transformer.position_encoding import LapEncoding, FullEncoding, POSENCODINGS
 from transformer.gckn_pe import GCKNEncoding
 from transformer.utils import count_parameters
 from timeit import default_timer as timer
 from torch import nn, optim
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
+from ogb.graphproppred import PygGraphPropPredDataset
+from ogb.utils.features import get_atom_feature_dims, get_bond_feature_dims
+from ogb.graphproppred import Evaluator
 
 
 def load_args():
@@ -31,10 +30,10 @@ def load_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--seed', type=int, default=0,
                         help='random seed')
-    parser.add_argument('--dataset', type=str, default="ZINC",
+    parser.add_argument('--dataset', type=str, default="ppa",
                         help='name of dataset')
     parser.add_argument('--nb-heads', type=int, default=8)
-    parser.add_argument('--nb-layers', type=int, default=5)
+    parser.add_argument('--nb-layers', type=int, default=10)
     parser.add_argument('--dim-hidden', type=int, default=64)
     parser.add_argument('--pos-enc', choices=[None,
                         'diffusion', 'pstep', 'adj'], default=None)
@@ -50,21 +49,20 @@ def load_args():
     parser.add_argument('--normalization', choices=[None, 'sym', 'rw'], default='sym',
                         help='normalization for Laplacian')
     parser.add_argument('--dropout', type=float, default=0.0)
-    parser.add_argument('--epochs', type=int, default=500,
+    parser.add_argument('--epochs', type=int, default=200,
                         help='number of epochs')
-    parser.add_argument('--lr', type=float, default=0.001,
+    parser.add_argument('--lr', type=float, default=0.0001,
                         help='initial learning rate')
     parser.add_argument('--batch-size', type=int, default=128,
                         help='batch size')
     parser.add_argument('--outdir', type=str, default='',
                         help='output path')
-    parser.add_argument('--warmup', type=int, default=2000)
+    parser.add_argument('--warmup', type=int, default=None)
     parser.add_argument('--layer-norm', action='store_true', help='use layer norm instead of batch norm')
     parser.add_argument('--zero-diag', action='store_true', help='zero diagonal for PE matrix')
+    parser.add_argument('--encode-edge', action='store_true', help='encode edges features in gckn')
     parser.add_argument('--use-edge-attr', action='store_true', help='use edge features in attention')
-    parser.add_argument('--weight-decay', default=1e-4, type=float, help='weight decay')
-    parser.add_argument('--encode-edge', action='store_true', help='use edge features in gckn')
-
+    parser.add_argument('--weight-decay', default=0.01, type=float, help='weight decay')
     args = parser.parse_args()
     args.use_cuda = torch.cuda.is_available()
     args.batch_norm = not args.layer_norm
@@ -76,67 +74,53 @@ def load_args():
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 1")
+            except Exception:
                 pass
         outdir = outdir + '/transformer'
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 2")
+            except Exception:
                 pass
         outdir = outdir + '/{}'.format(args.dataset)
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 3")
+            except Exception:
                 pass
         if args.zero_diag:
             outdir = outdir + '/zero_diag'
             if not os.path.exists(outdir):
                 try:
                     os.makedirs(outdir)
-                except Exception as e:
-                    print(e)
-                    print("/!\ THERE IS A PROBLEM WITH OUTDIR 4")
+                except Exception:
                     pass
         if args.use_edge_attr:
             outdir = outdir + '/edge_attr'
             if not os.path.exists(outdir):
                 try:
                     os.makedirs(outdir)
-                except Exception as e:
-                    print(e)
-                    print("/!\ THERE IS A PROBLEM WITH OUTDIR 5")
+                except Exception:
                     pass
+        
         lapdir = 'gckn_{}_{}_{}_{}_{}_{}_{}'.format(args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
             args.gckn_agg, args.gckn_normalize, args.encode_edge) 
-
         outdir = outdir + '/{}'.format(lapdir)
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 6")
+            except Exception:
                 pass
         bn = 'BN' if args.batch_norm else 'LN'
-        outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
+        outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
             args.lr, args.nb_layers, args.nb_heads, args.dim_hidden, bn,
-            args.pos_enc, args.normalization, args.p, args.beta, 
-            args.weight_decay, args.dropout
+            args.pos_enc, args.normalization, args.p, args.beta,
+            args.weight_decay
         )
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 7")
+            except Exception:
                 pass
         args.outdir = outdir
     return args
@@ -149,6 +133,7 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
 
     tic = timer()
     for i, (data, mask, pe, lap_pe, degree, labels) in enumerate(loader):
+        labels = labels.float()
         if args.warmup is not None:
             iteration = epoch * len(loader) + i
             for param_group in optimizer.param_groups:
@@ -172,6 +157,7 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
         optimizer.step()
 
         running_loss += loss.item() * len(data)
+
     toc = timer()
     n_sample = len(loader.dataset)
     epoch_loss = running_loss / n_sample
@@ -184,12 +170,13 @@ def eval_epoch(model, loader, criterion, use_cuda=False):
     model.eval()
 
     running_loss = 0.0
-    mae_loss = 0.0
-    mse_loss = 0.0
+    y_true = []
+    y_pred = []
 
     tic = timer()
     with torch.no_grad():
         for data, mask, pe, lap_pe, degree, labels in loader:
+            labels = labels.float()
 
             if use_cuda:
                 data = data.cuda()
@@ -204,19 +191,21 @@ def eval_epoch(model, loader, criterion, use_cuda=False):
 
             output = model(data, mask, pe, lap_pe, degree)
             loss = criterion(output, labels)
-            mse_loss += F.mse_loss(output, labels).item() * len(data)
-            mae_loss += F.l1_loss(output, labels).item() * len(data)
+            y_true.append(labels.cpu())
+            y_pred.append(output.sigmoid().cpu())
+            
 
             running_loss += loss.item() * len(data)
     toc = timer()
 
     n_sample = len(loader.dataset)
     epoch_loss = running_loss / n_sample
-    epoch_mae = mae_loss / n_sample
-    epoch_mse = mse_loss / n_sample
-    print('Val loss: {:.4f} MSE loss: {:.4f} MAE loss: {:.4f} time: {:.2f}s'.format(
-          epoch_loss, epoch_mse, epoch_mae, toc - tic))
-    return epoch_mae, epoch_mse
+    evaluator = Evaluator(name='ogbg-ppa')
+    auc = evaluator.eval({'y_pred': torch.cat(y_pred),
+                             'y_true': torch.cat(y_true)})['rocauc']
+    print('Val loss: {:.4f} auROC: {:.4f} time: {:.2f}s'.format(
+          epoch_loss, auc, toc - tic))
+    return auc, epoch_loss
 
 def main():
     global args
@@ -224,26 +213,37 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     print(args)
-    data_path = '../dataset/ZINC'
-    # number of node attributes for ZINC dataset
-    n_tags = 28
-    if args.encode_edge or args.use_edge_attr:
-        num_edge_features = 3
-        train_dset = datasets.ZINC(data_path, subset=True, split='train', transform=OneHotEdges(num_edge_features))
-        val_dset = datasets.ZINC(data_path, subset=True, split='val', transform=OneHotEdges(num_edge_features))
-        test_dset = datasets.ZINC(data_path, subset=True, split='test', transform=OneHotEdges(num_edge_features))
-    else:
-        num_edge_features = 0
-        train_dset = datasets.ZINC(data_path, subset=True, split='train')
-        val_dset = datasets.ZINC(data_path, subset=True, split='val')
-        test_dset = datasets.ZINC(data_path, subset=True, split='test')
+    data_path = '../dataset'
+    # number of node attributes for ppa dataset
+    n_tags = get_atom_feature_dims()
+    print(n_tags)
+    num_edge_features = get_bond_feature_dims()
 
-    gckn_pos_enc_path = '../cache/pe/zinc_gckn_{}_{}_{}_{}_{}_{}_{}.pkl'.format(
+    # if args.encode_edge or args.use_edge_attr:
+    #     dataset = PygGraphPropPredDataset(name='ogbg-ppa', root=data_path, transform=OneHotEdgesMult(num_edge_features))
+    # else:
+        # dataset = PygGraphPropPredDataset(name='ogbg-ppa', root=data_path)
+    dataset = PygGraphPropPredDataset(name='ogbg-ppa', root=data_path)
+    
+    print("num edge features: ", num_edge_features)
+    print(dataset[0])
+    print(dataset[0].edge_attr)
+    print("bye")
+
+    return 0
+
+
+    split_idx = dataset.get_idx_split()
+    train_dset = dataset[split_idx['train']]
+    val_dset = dataset[split_idx['valid']]
+    test_dset = dataset[split_idx['test']]
+
+    gckn_pos_enc_path = '../cache/pe/ppa_gckn_{}_{}_{}_{}_{}_{}.pkl'.format(
         args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
         args.gckn_agg, args.gckn_normalize, args.encode_edge)
     gckn_pos_encoder = GCKNEncoding(
         gckn_pos_enc_path, args.gckn_dim, args.gckn_path, args.gckn_sigma, args.gckn_pooling,
-        args.gckn_agg, args.gckn_normalize, args.encode_edge, num_edge_features)
+        args.gckn_agg, args.gckn_normalize)
     print('GCKN Position encoding')
     gckn_pos_enc_values = gckn_pos_encoder.apply_to(
         train_dset, val_dset + test_dset, batch_size=64, n_tags=n_tags)
@@ -284,9 +284,9 @@ def main():
             pos_encoding_params = {}
 
         if pos_encoding_method is not None:
-            pos_cache_path = '../cache/pe/zinc_{}_{}_{}.pkl'.format(args.pos_enc, args.normalization, pos_encoding_params_str)
+            pos_cache_path = '../cache/pe/ppa_{}_{}_{}.pkl'.format(args.pos_enc, args.normalization, pos_encoding_params_str)
             pos_encoder = pos_encoding_method(
-                pos_cache_path, normalization=args.normalization, 
+                pos_cache_path, normalization=args.normalization,
                 zero_diag=args.zero_diag, **pos_encoding_params)
 
         print("Position encoding...")
@@ -315,7 +315,8 @@ def main():
                                      lap_pos_enc=True,
                                      lap_pos_enc_dim=gckn_dim,
                                      use_edge_attr=args.use_edge_attr,
-                                     num_edge_features=num_edge_features)
+                                     num_edge_features=num_edge_features
+                                    )
     else:
         model = GraphTransformer(in_size=input_size,
                                  nb_class=1,
@@ -330,7 +331,7 @@ def main():
         model.cuda()
     print("Total number of parameters: {}".format(count_parameters(model)))
 
-    criterion = nn.L1Loss()
+    criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     if args.warmup is None:
         lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
@@ -357,7 +358,7 @@ def main():
     test_dset.lap_pe_dim = gckn_dim
 
     print("Training...")
-    best_val_loss = float('inf')
+    best_val_score = 0
     best_model = None
     best_epoch = 0
     logs = defaultdict(list)
@@ -365,36 +366,36 @@ def main():
     for epoch in range(args.epochs):
         print("Epoch {}/{}, LR {:.6f}".format(epoch + 1, args.epochs, optimizer.param_groups[0]['lr']))
         train_loss = train_epoch(model, train_loader, criterion, optimizer, lr_scheduler, epoch, args.use_cuda)
-        val_loss,_ = eval_epoch(model, val_loader, criterion, args.use_cuda)
-        test_loss,_ = eval_epoch(model, test_loader, criterion, args.use_cuda)
+        val_score, val_loss = eval_epoch(model, val_loader, criterion, args.use_cuda)
+        test_score,_ = eval_epoch(model, test_loader, criterion, args.use_cuda)
 
         if args.warmup is None:
             lr_scheduler.step(val_loss)
 
-        logs['train_mae'].append(train_loss)
-        logs['val_mae'].append(val_loss)
-        logs['test_mae'].append(test_loss)
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        logs['train_loss'].append(train_loss)
+        logs['val_score'].append(val_score)
+        logs['test_score'].append(test_score)
+        if val_score > best_val_score:
+            best_val_score = val_score
             best_epoch = epoch
             best_weights = copy.deepcopy(model.state_dict())
     total_time = timer() - start_time
-    print("best epoch: {} best val loss: {:.4f}".format(best_epoch, best_val_loss))
+    print("best epoch: {} best val score: {:.4f}".format(best_epoch, best_val_score))
     model.load_state_dict(best_weights)
 
     print()
     print("Testing...")
-    test_loss, test_mse_loss = eval_epoch(model, test_loader, criterion, args.use_cuda)
+    test_score, test_loss = eval_epoch(model, test_loader, criterion, args.use_cuda)
 
-    print("test MAE loss {:.4f}".format(test_loss))
+    print("test auROC {:.4f}".format(test_score))
 
     if args.save_logs:
         logs = pd.DataFrame.from_dict(logs)
         logs.to_csv(args.outdir + '/logs.csv')
         results = {
-            'test_mae': test_loss,
-            'test_mse': test_mse_loss,
-            'val_mae': best_val_loss,
+            'test_auc': test_score,
+            'test_loss': test_loss,
+            'val_auc': best_val_score,
             'best_epoch': best_epoch,
             'total_time': total_time,
         }

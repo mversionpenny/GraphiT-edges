@@ -1,7 +1,7 @@
 #!/bin/bash
 
 sendjob(){
-        max_jobs=150
+        max_jobs=250
         counter=`squeue -u $USER | wc -l`
         echo $counter
         while [ "$counter" -ge "$max_jobs" ]; do
@@ -50,21 +50,21 @@ fi
 echo "outdir = $outdir"
 
 
-#outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
+# outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
 #            args.lr, args.nb_layers, args.nb_heads, args.dim_hidden, bn,
 #            args.pos_enc, args.normalization, args.p, args.beta, 
 #            args.weight_decay, args.dropout
 #        )
 
-# seed3/transformer/ZINC/gckn_8_32_0.6_sum_True_True_True/0.0001_3_8_64_BN_None_sym_1_0.6_0.001_0.3/results.csv  not found.
-# seed3/transformer/ZINC/gckn_8_32_0.6_sum_True_True_True/0.001_3_8_128_BN_None_sym_1_0.6_0.0001_0.3/results.csv  not found.
-# seed3/transformer/ZINC/gckn_8_32_0.6_sum_True_True_True/0.0001_3_8_128_BN_None_sym_1_0.6_0.001_0.0/results.csv  not found.
-# seed3/transformer/ZINC/gckn_8_32_0.6_sum_True_True_True/0.0001_3_8_128_BN_None_sym_1_0.6_0.001_0.3/results.csv  not found.
+# /gpfswork/rech/tbr/uho58uo/results-transfo-gckn-zinc/seed1/transformer/ZINC/gckn_8_32_0.6_sum_True_True_True/1e-05_3_8_128_BN_diffusion_sym_1_0.6_0.0001_0.0/results.csv  not found.
+# /gpfswork/rech/tbr/uho58uo/results-transfo-gckn-zinc/seed1/transformer/ZINC/gckn_8_32_0.6_sum_True_True_True/1e-05_3_8_256_BN_diffusion_sym_1_0.6_0.0001_0.3/results.csv  not found.
+# /gpfswork/rech/tbr/uho58uo/results-transfo-gckn-zinc/seed1/transformer/ZINC/gckn_8_32_0.6_sum_True_True_True/0.001_4_8_64_BN_diffusion_sym_1_0.6_0.001_0.3/results.csv  not found.
+# /gpfswork/rech/tbr/uho58uo/results-transfo-gckn-zinc/seed1/transformer/ZINC/gckn_8_32_0.6_sum_True_True_True/0.0001_4_8_128_BN_diffusion_sym_1_0.6_0.001_0.3/results.csv  not found.
 
 
 dataset='ZINC'
 epochs=500
-seeds="3"
+seeds="1"
 
 
 pos_enc="diffusion"
@@ -76,8 +76,8 @@ gckn_pooling="sum"
 ps="1"
 betas="0.6"
 nb_heads=8
-nb_layers="3"
-dim_hiddens="64"
+nb_layers="4"
+dim_hiddens="128"
 lrs="0.0001"
 wds="0.001"
 dropouts="0.3"
@@ -101,7 +101,7 @@ for gckn_sigma in $gckn_sigmas; do
 			if [ ! -f ${outdir}${seed}/transformer/ZINC/${edge_attr}/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv ]; then					
 			#echo ${outdir}${seed}/transformer/ZINC/edge_attr/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv
             args="--outdir ${outdir}${seed} --seed ${seed} --epochs ${epochs} \
-            --p ${p} --beta ${beta} \
+            --pos-enc ${pos_enc} --p ${p} --beta ${beta} \
             --gckn-dim ${gckn_dim} --gckn-path ${gckn_path} --gckn-sigma ${gckn_sigma} --gckn-pooling ${gckn_pooling} \
             --nb-heads ${nb_heads} --nb-layers ${nb_layer} --dim-hidden ${dim_hidden} --lr ${lr} --weight-decay ${wd} --dropout ${dropout} \
             --warmup 2000 ${encode_edge} ${use_edge_attr}"  

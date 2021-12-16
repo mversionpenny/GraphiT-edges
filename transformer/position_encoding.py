@@ -108,7 +108,7 @@ class PStepRWEncoding(PositionEncoding):
             pe_tensors = torch.zeros((self.num_edge_features_true, graph.num_nodes, graph.num_nodes))
             for i in range(self.num_edge_features_true):
                 pe_i = self.compute_pe_from_edge_weight(
-                    graph.edge_index, graph.edge_attr[:, i], graph.num_nodes)
+                    graph.edge_index, graph.edge_attr[:, i].float(), graph.num_nodes)
                 pe_tensors[i] = pe_i
             return pe_tensors
         return self.compute_pe_from_edge_weight(graph.edge_index, None, graph.num_nodes)

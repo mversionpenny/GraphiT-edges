@@ -306,6 +306,7 @@ class PathLoader(object):
                     edge_features.append(g.edge_features)
                     tmp_paths_edges = get_path_edges_indices_init(all_paths[i], g.edge_index, n_nodes[i], self.aggregation)
                     paths_edges.append(tmp_paths_edges)
+            breakpoint()
             labels[i] = g.label
         edges_string_path = ''
 

@@ -16,12 +16,13 @@ export PYTHONPATH=${WORK}/GraphiT-edges
 echo $PYTHONPATH
 
 
+
 module purge
 
 # module load cuda/10.1.2
 module load pytorch-gpu/py3/1.6.0
 
- 
+
 cd $PYTHONPATH
 cd experiments
 
@@ -30,4 +31,4 @@ args=$1
 
 echo "$args"
 
-python -u $WORK/GraphiT-edges/experiments/run_transformer_gckn.py $args
+python -u $WORK/GraphiT-edges/experiments/run_transformer_ppa_gckn.py $args

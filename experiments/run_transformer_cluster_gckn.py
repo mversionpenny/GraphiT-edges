@@ -24,17 +24,16 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 
-
 def load_args():
     parser = argparse.ArgumentParser(
         description='Transformer baseline',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--seed', type=int, default=0,
                         help='random seed')
-    parser.add_argument('--dataset', type=str, default="ZINC",
+    parser.add_argument('--dataset', type=str, default="CLUSTER",
                         help='name of dataset')
     parser.add_argument('--nb-heads', type=int, default=8)
-    parser.add_argument('--nb-layers', type=int, default=5)
+    parser.add_argument('--nb-layers', type=int, default=10)
     parser.add_argument('--dim-hidden', type=int, default=64)
     parser.add_argument('--pos-enc', choices=[None,
                         'diffusion', 'pstep', 'adj'], default=None)
@@ -61,10 +60,8 @@ def load_args():
     parser.add_argument('--warmup', type=int, default=2000)
     parser.add_argument('--layer-norm', action='store_true', help='use layer norm instead of batch norm')
     parser.add_argument('--zero-diag', action='store_true', help='zero diagonal for PE matrix')
-    parser.add_argument('--use-edge-attr', action='store_true', help='use edge features in attention')
-    parser.add_argument('--weight-decay', default=1e-4, type=float, help='weight decay')
-    parser.add_argument('--encode-edge', action='store_true', help='use edge features in gckn')
-
+    parser.add_argument('--encode-edge', action='store_true', help='if true then we encode the edges')
+    parser.add_argument('--weight-decay', default=0.01, type=float, help='weight decay')
     args = parser.parse_args()
     args.use_cuda = torch.cuda.is_available()
     args.batch_norm = not args.layer_norm
@@ -76,67 +73,44 @@ def load_args():
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 1")
+            except Exception:
                 pass
         outdir = outdir + '/transformer'
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 2")
+            except Exception:
                 pass
         outdir = outdir + '/{}'.format(args.dataset)
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 3")
+            except Exception:
                 pass
         if args.zero_diag:
             outdir = outdir + '/zero_diag'
             if not os.path.exists(outdir):
                 try:
                     os.makedirs(outdir)
-                except Exception as e:
-                    print(e)
-                    print("/!\ THERE IS A PROBLEM WITH OUTDIR 4")
-                    pass
-        if args.use_edge_attr:
-            outdir = outdir + '/edge_attr'
-            if not os.path.exists(outdir):
-                try:
-                    os.makedirs(outdir)
-                except Exception as e:
-                    print(e)
-                    print("/!\ THERE IS A PROBLEM WITH OUTDIR 5")
+                except Exception:
                     pass
         lapdir = 'gckn_{}_{}_{}_{}_{}_{}_{}'.format(args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
             args.gckn_agg, args.gckn_normalize, args.encode_edge) 
-
         outdir = outdir + '/{}'.format(lapdir)
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 6")
+            except Exception:
                 pass
         bn = 'BN' if args.batch_norm else 'LN'
-        outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
+        outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
             args.lr, args.nb_layers, args.nb_heads, args.dim_hidden, bn,
-            args.pos_enc, args.normalization, args.p, args.beta, 
-            args.weight_decay, args.dropout
+            args.pos_enc, args.normalization, args.p, args.beta, args.weight_decay
         )
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception as e:
-                print(e)
-                print("/!\ THERE IS A PROBLEM WITH OUTDIR 7")
+            except Exception:
                 pass
         args.outdir = outdir
     return args
@@ -172,6 +146,7 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
         optimizer.step()
 
         running_loss += loss.item() * len(data)
+
     toc = timer()
     n_sample = len(loader.dataset)
     epoch_loss = running_loss / n_sample
@@ -224,26 +199,22 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     print(args)
-    data_path = '../dataset/ZINC'
-    # number of node attributes for ZINC dataset
+    data_path = '../dataset/CLUSTER'
+    # number of node attributes for CLUSTER dataset
     n_tags = 28
-    if args.encode_edge or args.use_edge_attr:
-        num_edge_features = 3
-        train_dset = datasets.ZINC(data_path, subset=True, split='train', transform=OneHotEdges(num_edge_features))
-        val_dset = datasets.ZINC(data_path, subset=True, split='val', transform=OneHotEdges(num_edge_features))
-        test_dset = datasets.ZINC(data_path, subset=True, split='test', transform=OneHotEdges(num_edge_features))
-    else:
-        num_edge_features = 0
-        train_dset = datasets.ZINC(data_path, subset=True, split='train')
-        val_dset = datasets.ZINC(data_path, subset=True, split='val')
-        test_dset = datasets.ZINC(data_path, subset=True, split='test')
 
-    gckn_pos_enc_path = '../cache/pe/zinc_gckn_{}_{}_{}_{}_{}_{}_{}.pkl'.format(
+
+    num_edge_classes = 0
+    train_dset = datasets.GNNBenchmarkDataset(data_path, name="CLUSTER", split='train')
+    val_dset = datasets.GNNBenchmarkDataset(data_path, name="CLUSTER", split='val')
+    test_dset = datasets.GNNBenchmarkDataset(data_path, name="CLUSTER", split='test')
+
+    gckn_pos_enc_path = '../cache/pe/cluster_gckn_{}_{}_{}_{}_{}_{}_{}.pkl'.format(
         args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
         args.gckn_agg, args.gckn_normalize, args.encode_edge)
     gckn_pos_encoder = GCKNEncoding(
         gckn_pos_enc_path, args.gckn_dim, args.gckn_path, args.gckn_sigma, args.gckn_pooling,
-        args.gckn_agg, args.gckn_normalize, args.encode_edge, num_edge_features)
+        args.gckn_agg, args.gckn_normalize, args.encode_edge, num_edge_classes)
     print('GCKN Position encoding')
     gckn_pos_enc_values = gckn_pos_encoder.apply_to(
         train_dset, val_dset + test_dset, batch_size=64, n_tags=n_tags)
@@ -267,27 +238,21 @@ def main():
         pos_encoding_params_str = ""
         if args.pos_enc == 'diffusion':
             pos_encoding_params = {
-                'beta': args.beta,
-                'use_edge_attr': args.use_edge_attr,
-                'num_edge_features': num_edge_features
+                'beta': args.beta
             }
-            pos_encoding_params_str = "{}_{}".format(args.beta, args.use_edge_attr)
+            pos_encoding_params_str = args.beta
         elif args.pos_enc == 'pstep':
             pos_encoding_params = {
                 'beta': args.beta,
-                'p': args.p,
-                'use_edge_attr': args.use_edge_attr,
-                'num_edge_features': num_edge_features
+                'p': args.p
             }
-            pos_encoding_params_str = "{}_{}_{}".format(args.p, args.beta, args.use_edge_attr)
+            pos_encoding_params_str = "{}_{}".format(args.p, args.beta)
         else:
             pos_encoding_params = {}
 
         if pos_encoding_method is not None:
-            pos_cache_path = '../cache/pe/zinc_{}_{}_{}.pkl'.format(args.pos_enc, args.normalization, pos_encoding_params_str)
-            pos_encoder = pos_encoding_method(
-                pos_cache_path, normalization=args.normalization, 
-                zero_diag=args.zero_diag, **pos_encoding_params)
+            pos_cache_path = '../cache/pe/cluster_{}_{}_{}.pkl'.format(args.pos_enc, args.normalization, pos_encoding_params_str)
+            pos_encoder = pos_encoding_method(pos_cache_path, normalization=args.normalization, zero_diag=args.zero_diag, **pos_encoding_params)
 
         print("Position encoding...")
         pos_encoder.apply_to(train_dset, split='train')
@@ -313,9 +278,7 @@ def main():
                                      nb_layers=args.nb_layers,
                                      batch_norm=args.batch_norm,
                                      lap_pos_enc=True,
-                                     lap_pos_enc_dim=gckn_dim,
-                                     use_edge_attr=args.use_edge_attr,
-                                     num_edge_features=num_edge_features)
+                                     lap_pos_enc_dim=gckn_dim)
     else:
         model = GraphTransformer(in_size=input_size,
                                  nb_class=1,
@@ -331,7 +294,7 @@ def main():
     print("Total number of parameters: {}".format(count_parameters(model)))
 
     criterion = nn.L1Loss()
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
     if args.warmup is None:
         lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                      factor=0.5,
