@@ -30,7 +30,7 @@ def load_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--seed', type=int, default=0,
                         help='random seed')
-    parser.add_argument('--dataset', type=str, default="ppa",
+    parser.add_argument('--dataset', type=str, default="moltox21",
                         help='name of dataset')
     parser.add_argument('--nb-heads', type=int, default=8)
     parser.add_argument('--nb-layers', type=int, default=10)
@@ -200,7 +200,7 @@ def eval_epoch(model, loader, criterion, use_cuda=False):
 
     n_sample = len(loader.dataset)
     epoch_loss = running_loss / n_sample
-    evaluator = Evaluator(name='ogbg-ppa')
+    evaluator = Evaluator(name='ogbg-moltox21')
     auc = evaluator.eval({'y_pred': torch.cat(y_pred),
                              'y_true': torch.cat(y_true)})['rocauc']
     print('Val loss: {:.4f} auROC: {:.4f} time: {:.2f}s'.format(
@@ -214,21 +214,23 @@ def main():
     np.random.seed(args.seed)
     print(args)
     data_path = '../dataset'
-    # number of node attributes for ppa dataset
+    # number of node attributes for moltox21 dataset
     n_tags = get_atom_feature_dims()
     print(n_tags)
     num_edge_features = get_bond_feature_dims()
 
     # if args.encode_edge or args.use_edge_attr:
-    #     dataset = PygGraphPropPredDataset(name='ogbg-ppa', root=data_path, transform=OneHotEdgesMult(num_edge_features))
+    #     dataset = PygGraphPropPredDataset(name='ogbg-moltox21', root=data_path, transform=OneHotEdgesMult(num_edge_features))
     # else:
-        # dataset = PygGraphPropPredDataset(name='ogbg-ppa', root=data_path)
-    dataset = PygGraphPropPredDataset(name='ogbg-ppa', root=data_path)
+        # dataset = PygGraphPropPredDataset(name='ogbg-moltox21', root=data_path)
+    dataset = PygGraphPropPredDataset(name='ogbg-moltox21', root=data_path)
     
     print("num edge features: ", num_edge_features)
     print(dataset[0])
     print(dataset[0].edge_attr)
-    print("bye")
+
+    breakpoint()
+
 
     return 0
 
@@ -238,7 +240,7 @@ def main():
     val_dset = dataset[split_idx['valid']]
     test_dset = dataset[split_idx['test']]
 
-    gckn_pos_enc_path = '../cache/pe/ppa_gckn_{}_{}_{}_{}_{}_{}.pkl'.format(
+    gckn_pos_enc_path = '../cache/pe/moltox21_gckn_{}_{}_{}_{}_{}_{}.pkl'.format(
         args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
         args.gckn_agg, args.gckn_normalize, args.encode_edge)
     gckn_pos_encoder = GCKNEncoding(
@@ -284,7 +286,7 @@ def main():
             pos_encoding_params = {}
 
         if pos_encoding_method is not None:
-            pos_cache_path = '../cache/pe/ppa_{}_{}_{}.pkl'.format(args.pos_enc, args.normalization, pos_encoding_params_str)
+            pos_cache_path = '../cache/pe/moltox21_{}_{}_{}.pkl'.format(args.pos_enc, args.normalization, pos_encoding_params_str)
             pos_encoder = pos_encoding_method(
                 pos_cache_path, normalization=args.normalization,
                 zero_diag=args.zero_diag, **pos_encoding_params)

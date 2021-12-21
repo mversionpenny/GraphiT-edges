@@ -77,7 +77,7 @@ gckn_paths="8"
 gckn_sigmas="0.6"
 gckn_pooling="sum"
 ps="1"  # "2 3"
-betas="0.5 0.6" # "0.5"
+betas="0.5" #"0.5 0.6" # "0.5"
 nb_heads=8
 nb_layers="3 4 5"
 dim_hiddens="64 128 256"
@@ -103,7 +103,7 @@ for gckn_sigma in $gckn_sigmas; do
 
 			params="${lr}_${nb_layer}_${nb_heads}_${dim_hidden}_BN_${pos_enc}_${normalization}_${p}_${beta}_${wd}_${dropout}"			
 			if [ ! -f ${outdir}${seed}/transformer/ZINC${zero_diag_attr}${edge_attr}/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv ]; then					
-			#echo ${outdir}${seed}/transformer/ZINC/edge_attr/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv
+			echo ${outdir}${seed}/transformer/ZINC${zero_diag_attr}${edge_attr}/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv
             args="--outdir ${outdir}${seed} --seed ${seed} --epochs ${epochs} \
             --pos-enc ${pos_enc} --p ${p} --beta ${beta} \
             --gckn-dim ${gckn_dim} --gckn-path ${gckn_path} --gckn-sigma ${gckn_sigma} --gckn-pooling ${gckn_pooling} \
