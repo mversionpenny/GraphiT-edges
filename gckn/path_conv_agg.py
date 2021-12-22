@@ -85,6 +85,8 @@ def path_conv_agg_torch(features, path_indices, kernel_size, pooling='sum', kapp
         embeded_edges = kappa(embeded_edges)
         embeded_edges = dpooling_torch(embeded_edges, kernel_size, pooling)
     embeded = kappa(embeded)
+    # if features.shape[0] == 936:
+    #     breakpoint()
     embeded = dpooling_torch(embeded, kernel_size, pooling)
     return embeded, embeded_edges
 

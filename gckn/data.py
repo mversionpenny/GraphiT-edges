@@ -272,6 +272,10 @@ class PathLoader(object):
         paths_edges = []
 
         labels = torch.zeros(self.n, dtype=torch.long)
+        # for some datasets, the problem is a multiple classification
+        if self.graphs[0].label.ndim>1 and self.graphs[0].label.shape[1]>1:
+            labels = torch.zeros((self.n,self.graphs[0].label.shape[1]), dtype=torch.long)
+
         mask_vec = []
 
         for i, g in enumerate(self.graphs):
@@ -306,7 +310,6 @@ class PathLoader(object):
                     edge_features.append(g.edge_features)
                     tmp_paths_edges = get_path_edges_indices_init(all_paths[i], g.edge_index, n_nodes[i], self.aggregation)
                     paths_edges.append(tmp_paths_edges)
-            breakpoint()
             labels[i] = g.label
         edges_string_path = ''
 
@@ -428,7 +431,7 @@ class PathLoader(object):
         else:
             indices = list(range(self.n))
         #features = self.data['features']
-
+        
         for index in range(0, self.n, self.batch_size):
             idx = indices[index:min(index + self.batch_size, self.n)]
             current_features = torch.cat([self.data['features'][i] for i in idx])
@@ -465,6 +468,8 @@ class PathLoader(object):
                     # we take k-1 because when path_size = 1, we don''t have edges
                     current_paths_edges = torch.cat([self.data['paths_edges'][i][0] for i in idx])
                     current_paths_edges = get_path_indices(current_paths_edges, current_n_paths_for_graph, current_n_edges)
+            # if current_n_paths[0].shape[0] == 936 or current_n_paths[0].shape[0] == 940:
+            #     breakpoint()
             if self.encode_edges:
                 yield {'features': current_features,
                    'paths': current_paths,

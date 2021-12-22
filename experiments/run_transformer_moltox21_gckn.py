@@ -152,7 +152,8 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
 
         optimizer.zero_grad()
         output = model(data, mask, pe, lap_pe, degree)
-        loss = criterion(output, labels)
+        is_labeled = labels == labels
+        loss = criterion(output[is_labeled], labels[is_labeled])
         loss.backward()
         optimizer.step()
 
@@ -190,7 +191,8 @@ def eval_epoch(model, loader, criterion, use_cuda=False):
                 labels = labels.cuda()
 
             output = model(data, mask, pe, lap_pe, degree)
-            loss = criterion(output, labels)
+            is_labeled = labels == labels
+            loss = criterion(output[is_labeled], labels[is_labeled])
             y_true.append(labels.cpu())
             y_pred.append(output.sigmoid().cpu())
             
@@ -206,6 +208,7 @@ def eval_epoch(model, loader, criterion, use_cuda=False):
     print('Val loss: {:.4f} auROC: {:.4f} time: {:.2f}s'.format(
           epoch_loss, auc, toc - tic))
     return auc, epoch_loss
+
 
 def main():
     global args
@@ -223,24 +226,47 @@ def main():
     #     dataset = PygGraphPropPredDataset(name='ogbg-moltox21', root=data_path, transform=OneHotEdgesMult(num_edge_features))
     # else:
         # dataset = PygGraphPropPredDataset(name='ogbg-moltox21', root=data_path)
-    dataset = PygGraphPropPredDataset(name='ogbg-moltox21', root=data_path)
+    dataset = PygGraphPropPredDataset(name='ogbg-moltox21', root=data_path, transform=OneHotEdgesMult(num_edge_features))
+    
     
     print("num edge features: ", num_edge_features)
-    print(dataset[0])
-    print(dataset[0].edge_attr)
-
-    breakpoint()
-
-
-    return 0
-
 
     split_idx = dataset.get_idx_split()
+
     train_dset = dataset[split_idx['train']]
     val_dset = dataset[split_idx['valid']]
     test_dset = dataset[split_idx['test']]
 
-    gckn_pos_enc_path = '../cache/pe/moltox21_gckn_{}_{}_{}_{}_{}_{}.pkl'.format(
+
+    ############### TODELETE ##############################
+    todel = []
+    for i in range(len(train_dset)):
+        if train_dset[i].edge_attr.shape[0] == 0:
+            todel.append(i)
+    mask = np.ones(len(train_dset), dtype=bool)
+    mask[todel] = False
+    train_dset = train_dset[torch.from_numpy(mask)]
+
+    todel = []
+    for i in range(len(val_dset)):
+        if val_dset[i].edge_attr.shape[0] == 0:
+            todel.append(i)
+    mask = np.ones(len(val_dset), dtype=bool)
+    mask[todel] = False
+    val_dset = val_dset[torch.from_numpy(mask)]
+
+    todel = []
+    for i in range(len(test_dset)):
+        if test_dset[i].edge_attr.shape[0] == 0:
+            todel.append(i)
+    mask = np.ones(len(test_dset), dtype=bool)
+    mask[todel] = False
+    test_dset = test_dset[torch.from_numpy(mask)]
+
+
+    ############### END TODELETE ##############################
+
+    gckn_pos_enc_path = '../cache/pe/moltox21_gckn_{}_{}_{}_{}_{}_{}_{}.pkl'.format(
         args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
         args.gckn_agg, args.gckn_normalize, args.encode_edge)
     gckn_pos_encoder = GCKNEncoding(
@@ -307,7 +333,7 @@ def main():
 
     if args.pos_enc is not None:
         model = DiffGraphTransformer(in_size=input_size,
-                                     nb_class=1,
+                                     nb_class=12,
                                      d_model=args.dim_hidden,
                                      dim_feedforward=2*args.dim_hidden,
                                      dropout=args.dropout,
@@ -321,7 +347,7 @@ def main():
                                     )
     else:
         model = GraphTransformer(in_size=input_size,
-                                 nb_class=1,
+                                 nb_class=12,
                                  d_model=args.dim_hidden,
                                  dim_feedforward=2*args.dim_hidden,
                                  dropout=args.dropout,
