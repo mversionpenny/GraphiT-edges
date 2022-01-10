@@ -33,7 +33,7 @@ def load_args():
     parser.add_argument('--dataset', type=str, default="moltox21",
                         help='name of dataset')
     parser.add_argument('--nb-heads', type=int, default=8)
-    parser.add_argument('--nb-layers', type=int, default=10)
+    parser.add_argument('--nb-layers', type=int, default=5)
     parser.add_argument('--dim-hidden', type=int, default=64)
     parser.add_argument('--pos-enc', choices=[None,
                         'diffusion', 'pstep', 'adj'], default=None)
@@ -49,20 +49,21 @@ def load_args():
     parser.add_argument('--normalization', choices=[None, 'sym', 'rw'], default='sym',
                         help='normalization for Laplacian')
     parser.add_argument('--dropout', type=float, default=0.0)
-    parser.add_argument('--epochs', type=int, default=200,
+    parser.add_argument('--epochs', type=int, default=500,
                         help='number of epochs')
-    parser.add_argument('--lr', type=float, default=0.0001,
+    parser.add_argument('--lr', type=float, default=0.001,
                         help='initial learning rate')
     parser.add_argument('--batch-size', type=int, default=128,
                         help='batch size')
     parser.add_argument('--outdir', type=str, default='',
                         help='output path')
-    parser.add_argument('--warmup', type=int, default=None)
+    parser.add_argument('--warmup', type=int, default=2000)
     parser.add_argument('--layer-norm', action='store_true', help='use layer norm instead of batch norm')
     parser.add_argument('--zero-diag', action='store_true', help='zero diagonal for PE matrix')
-    parser.add_argument('--encode-edge', action='store_true', help='encode edges features in gckn')
     parser.add_argument('--use-edge-attr', action='store_true', help='use edge features in attention')
-    parser.add_argument('--weight-decay', default=0.01, type=float, help='weight decay')
+    parser.add_argument('--weight-decay', default=1e-4, type=float, help='weight decay')
+    parser.add_argument('--encode-edge', action='store_true', help='use edge features in gckn')
+
     args = parser.parse_args()
     args.use_cuda = torch.cuda.is_available()
     args.batch_norm = not args.layer_norm
@@ -74,56 +75,71 @@ def load_args():
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 1")
                 pass
         outdir = outdir + '/transformer'
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 2")
                 pass
         outdir = outdir + '/{}'.format(args.dataset)
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 3")
                 pass
         if args.zero_diag:
             outdir = outdir + '/zero_diag'
             if not os.path.exists(outdir):
                 try:
                     os.makedirs(outdir)
-                except Exception:
+                except Exception as e:
+                    print(e)
+                    print("/!\ THERE IS A PROBLEM WITH OUTDIR 4")
                     pass
         if args.use_edge_attr:
             outdir = outdir + '/edge_attr'
             if not os.path.exists(outdir):
                 try:
                     os.makedirs(outdir)
-                except Exception:
+                except Exception as e:
+                    print(e)
+                    print("/!\ THERE IS A PROBLEM WITH OUTDIR 5")
                     pass
-        
         lapdir = 'gckn_{}_{}_{}_{}_{}_{}_{}'.format(args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
             args.gckn_agg, args.gckn_normalize, args.encode_edge) 
+
         outdir = outdir + '/{}'.format(lapdir)
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 6")
                 pass
         bn = 'BN' if args.batch_norm else 'LN'
-        outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
+        outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
             args.lr, args.nb_layers, args.nb_heads, args.dim_hidden, bn,
-            args.pos_enc, args.normalization, args.p, args.beta,
-            args.weight_decay
+            args.pos_enc, args.normalization, args.p, args.beta, 
+            args.weight_decay, args.dropout
         )
         if not os.path.exists(outdir):
             try:
                 os.makedirs(outdir)
-            except Exception:
+            except Exception as e:
+                print(e)
+                print("/!\ THERE IS A PROBLEM WITH OUTDIR 7")
                 pass
         args.outdir = outdir
     return args
+
 
 
 def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cuda=False):
@@ -271,7 +287,7 @@ def main():
         args.gckn_agg, args.gckn_normalize, args.encode_edge)
     gckn_pos_encoder = GCKNEncoding(
         gckn_pos_enc_path, args.gckn_dim, args.gckn_path, args.gckn_sigma, args.gckn_pooling,
-        args.gckn_agg, args.gckn_normalize)
+        args.gckn_agg, args.gckn_normalize, args.encode_edge, sum(num_edge_features))
     print('GCKN Position encoding')
     gckn_pos_enc_values = gckn_pos_encoder.apply_to(
         train_dset, val_dset + test_dset, batch_size=64, n_tags=n_tags)

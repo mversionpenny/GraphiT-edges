@@ -230,12 +230,12 @@ def main():
     val_dset = dataset[split_idx['valid']]
     test_dset = dataset[split_idx['test']]
 
-    gckn_pos_enc_path = '../cache/pe/molhiv_gckn_{}_{}_{}_{}_{}_{}.pkl'.format(
+    gckn_pos_enc_path = '../cache/pe/molhiv_gckn_{}_{}_{}_{}_{}_{}_{}.pkl'.format(
         args.gckn_path, args.gckn_dim, args.gckn_sigma, args.gckn_pooling,
         args.gckn_agg, args.gckn_normalize, args.encode_edge)
     gckn_pos_encoder = GCKNEncoding(
         gckn_pos_enc_path, args.gckn_dim, args.gckn_path, args.gckn_sigma, args.gckn_pooling,
-        args.gckn_agg, args.gckn_normalize)
+        args.gckn_agg, args.gckn_normalize, args.encode_edge, sum(num_edge_features))
     print('GCKN Position encoding')
     gckn_pos_enc_values = gckn_pos_encoder.apply_to(
         train_dset, val_dset + test_dset, batch_size=64, n_tags=n_tags)
