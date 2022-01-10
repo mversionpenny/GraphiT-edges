@@ -28,10 +28,10 @@ def main():
 
     
     bn='BN'
-    beta_grid = [0.5] #[0.5, 0.6] #[0.5]
+    beta_grid = [0.5, 0.6] #[0.5]
     p_grid = [1]
     normalization='sym'
-    pos_enc='None'
+    pos_enc='diffusion'
     nb_heads = 8
     nb_layers_grid=[3, 4, 5]
     dim_hidden_list=[64, 128, 256]
@@ -47,7 +47,7 @@ def main():
     best_val_path = ''
     test_mae_list = []
     for seed in seed_grid:
-        best_val_mae = 1000
+        best_val_mae = 1000 #= 0 #= 1000
         for beta in beta_grid:
             for p in p_grid:
                 for nb_layers in nb_layers_grid:
@@ -65,8 +65,9 @@ def main():
 
                                     if os.path.exists(path):
                                         results = pd.read_csv(path)
-                                        val_mae = results.loc[results['name'] == 'val_mae', 'value'].iloc[0]
-                                        if val_mae < best_val_mae:
+                                        #breakpoint()
+                                        val_mae = results.loc[results['name'] == 'val_mae', 'value'].iloc[0]#results.loc[results['name'] == 'val_auc', 'value'].iloc[0]#results.loc[results['name'] == 'val_mae', 'value'].iloc[0]
+                                        if val_mae < best_val_mae:#val_mae > best_val_mae:#val_mae < best_val_mae:
                                             best_val_mae = val_mae
                                             best_val_path = path
                                     else:
@@ -74,7 +75,7 @@ def main():
 
         print("*******", best_val_path, "*******")                          
         best_val_df = pd.read_csv(best_val_path)
-        test_mae = best_val_df.loc[best_val_df['name'] == 'test_mae', 'value'].iloc[0]
+        test_mae = best_val_df.loc[best_val_df['name'] == 'test_mae', 'value'].iloc[0] #best_val_df.loc[best_val_df['name'] == 'test_auc', 'value'].iloc[0] #best_val_df.loc[best_val_df['name'] == 'test_mae', 'value'].iloc[0]
         test_mae_list.append(test_mae)
     print(test_mae_list)
     print("mean: ", mean(test_mae_list))
