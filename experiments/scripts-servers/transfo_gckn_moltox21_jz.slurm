@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name transfo-paths-zinc
+#SBATCH --job-name transfo-paths-moltox21
 #SBATCH -A tbr@gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -31,4 +31,4 @@ args=$1
 
 echo "$args"
 
-python -u $WORK/GraphiT-edges/experiments/run_transformer_ppa_gckn.py $args
+python -u $WORK/GraphiT-edges/experiments/run_transformer_moltox21_gckn.py $args

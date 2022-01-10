@@ -16,6 +16,10 @@ class PositionEncoding(object):
 
     def apply_to(self, dataset, split='train'):
         saved_pos_enc = self.load(split)
+        # if saved_pos_enc is None:
+        #     print("Didn't find pos_enc!")
+        # else:
+        #     print("Found pos_enc!")
         all_pe = []
         dataset.pe_list = []
         for i, g in enumerate(dataset):

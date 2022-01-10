@@ -9,7 +9,7 @@ sendjob(){
                 counter=`squeue -u $USER | wc -l`
                 echo $counter
         done
-        sbatch $WORK/GraphiT-edges/experiments/scripts-servers/transfo_gckn_ppa_jz.slurm "$1"
+        sbatch $WORK/GraphiT-edges/experiments/scripts-servers/transfo_gckn_moltox21_jz.slurm "$1"
 }
 
 
@@ -22,7 +22,7 @@ do
     esac
 done
 
-outdir=$WORK/results-transfo-gckn-ppa/seed
+outdir=$WORK/results-transfo-gckn-moltox21/seed
 
 echo "encode -e : $encode_e"
 if [ $encode_e = 'e' ]; then
@@ -39,7 +39,7 @@ fi
 echo "use edge in attention -u : $use_e"
 if [ $use_e = 'e' ]; then
 	use_edge_attr='--use-edge-attr' 
-    edge_attr='edge_attr'
+    edge_attr='/edge_attr'
 elif [ $use_e = 'ne' ]; then
 	use_edge_attr=''
     edge_attr=''
@@ -71,17 +71,17 @@ echo "outdir = $outdir"
 
 
 dataset='moltox21'
-epochs=300
+epochs=150
 seeds="0 1 2 3"
 
-pos_enc="diffusion"
+pos_enc="pstep"
 normalization="sym"
 gckn_dims="32"
 gckn_paths="8"
 gckn_sigmas="0.6"
 gckn_pooling="sum"
-ps="1"  # "2 3"
-betas="0.5 0.6" # "0.5"
+ps="2 3"  #"1"  # "2 3"
+betas="0.5" #"0.5 0.6" # "0.5"
 nb_heads=8
 nb_layers="3 4 5"
 dim_hiddens="64 128 256"
