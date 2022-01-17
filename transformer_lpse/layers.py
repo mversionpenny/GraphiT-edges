@@ -4,10 +4,156 @@ from __future__ import division
 import torch
 import warnings
 
+from torch.nn.init import xavier_uniform_
+from torch.nn.parameter import Parameter
+
 from torch import nn
 
-
 def diff_multi_head_attention_forward(query,
+                                      key,
+                                      value,
+                                      pe,
+                                      embed_dim_to_check,
+                                      num_heads,
+                                      in_proj_weight,
+                                      in_proj_weight_op,
+                                      in_proj_bias,
+                                      bias_k,
+                                      bias_v,
+                                      add_zero_attn,
+                                      dropout_p,
+                                      out_proj_weight,
+                                      out_proj_bias,
+                                      training=True,
+                                      key_padding_mask=None,
+                                      need_weights=True,
+                                      attn_mask=None,
+                                      attn_mask_op=None,
+                                      use_separate_proj_weight=False,
+                                      q_proj_weight=None,
+                                      k_proj_weight=None,
+                                      v_proj_weight=None,
+                                      static_k=None,
+                                      static_v=None
+                                      ):
+
+    qkv_same = torch.equal(query, key) and torch.equal(key, value)
+    kv_same = torch.equal(key, value)
+
+    tgt_len, bsz, embed_dim = query.size()
+    assert embed_dim == embed_dim_to_check
+    assert list(query.size()) == [tgt_len, bsz, embed_dim]
+    assert key.size() == value.size()
+
+    head_dim = embed_dim // num_heads
+    assert head_dim * num_heads == embed_dim, "embed_dim must be divisible by \
+            num_heads"
+    scaling = float(head_dim) ** -0.5
+
+    
+    if use_separate_proj_weight is not True:
+        if qkv_same:
+            # self-attention
+            q, k, v = nn.functional.linear(query, in_proj_weight,
+                                           in_proj_bias).chunk(3, dim=-1)
+            q_op, k_op = nn.functional.linear(query, in_proj_weight_op,
+                                           in_proj_bias).chunk(2, dim=-1)
+            
+        
+    k = q
+    q = q * scaling
+
+    k_op = q_op
+    q_op = q_op * scaling
+
+    q = q.contiguous().view(tgt_len, bsz * num_heads, head_dim).transpose(0, 1)
+    q_op = q_op.contiguous().view(tgt_len, bsz * num_heads, head_dim).transpose(0, 1)
+    if k is not None:
+        k = k.contiguous().view(-1, bsz * num_heads, head_dim).transpose(0, 1)
+        k_op = k_op.contiguous().view(-1, bsz * num_heads, head_dim).transpose(0, 1)
+    if v is not None:
+        v = v.contiguous().view(-1, bsz * num_heads, head_dim).transpose(0, 1)
+
+
+    src_len = k.size(1)
+
+    if key_padding_mask is not None:
+        assert key_padding_mask.size(0) == bsz
+        assert key_padding_mask.size(1) == src_len
+
+
+    attn_output_weights = torch.bmm(q, k.transpose(1, 2))
+    assert list(attn_output_weights.size()) == [bsz * num_heads, tgt_len,
+                                                src_len]
+
+    attn_output_weights_op = torch.bmm(q_op, k_op.transpose(1, 2))
+    assert list(attn_output_weights_op.size()) == [bsz * num_heads, tgt_len,
+                                                src_len]
+
+    # ici etait le mask a la base  
+    if attn_mask is not None:
+        #attn_mask = attn_mask.unsqueeze(0)
+        attn_mask = torch.repeat_interleave(attn_mask, repeats=num_heads, dim=0)
+        attn_output_weights *= attn_mask
+
+    if attn_mask_op is not None:
+        #attn_mask_op = attn_mask_op.unsqueeze(0)
+        attn_mask_op = torch.repeat_interleave(attn_mask_op, repeats=num_heads, dim=0)
+        attn_output_weights_op *= attn_mask_op 
+    
+    
+
+
+    if key_padding_mask is not None:
+        attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len,
+                                                       src_len)
+        attn_output_weights = attn_output_weights.masked_fill(
+            key_padding_mask.unsqueeze(1).unsqueeze(2),
+            float('-inf'),
+        )
+        attn_output_weights = attn_output_weights.view(bsz * num_heads,
+                                                       tgt_len, src_len)
+
+    pe = torch.repeat_interleave(pe, repeats=num_heads, dim=0)
+    # numerical stability
+    max_val = attn_output_weights.max(dim=-1, keepdim=True)[0]
+    attn_output_weights = torch.exp(attn_output_weights - max_val)
+    attn_output_weights = attn_output_weights * pe
+
+    max_val_op = attn_output_weights_op.max(dim=-1, keepdim=True)[0]
+    attn_output_weights_op = torch.exp(attn_output_weights_op - max_val_op)
+    attn_output_weights_op = attn_output_weights_op * pe
+
+    
+
+
+    # Le plus logique serait de mettre le mask ici (mais résultats moins bons)
+    attn_output_weights +=  attn_output_weights_op
+
+    
+
+    attn_output_weights = attn_output_weights / attn_output_weights.sum(
+        dim=-1, keepdim=True).clamp(min=1e-6)
+    attn_output_weights = nn.functional.dropout(attn_output_weights,
+                                                p=dropout_p, training=training)
+    attn_output = torch.bmm(attn_output_weights, v)
+    assert list(attn_output.size()) == [bsz * num_heads, tgt_len, head_dim]
+    attn_output = attn_output.transpose(0, 1).contiguous().view(
+            tgt_len, bsz, embed_dim)
+    attn_output = nn.functional.linear(attn_output, out_proj_weight,
+                                       out_proj_bias)
+
+    if need_weights:
+        # average attention weights over heads
+        attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len,
+                                                       src_len)
+        # return attn_output, attn_output_weights.sum(dim=1) / num_heads
+        return attn_output, attn_output_weights
+    else:
+        return attn_output, None
+
+
+def diff_multi_head_attention_forward2(query,
                                       key,
                                       value,
                                       pe,
@@ -184,8 +330,8 @@ def diff_multi_head_attention_forward(query,
     if key_padding_mask is not None:
         assert key_padding_mask.size(0) == bsz
         assert key_padding_mask.size(1) == src_len
-
     if add_zero_attn:
+        
         src_len += 1
         k = torch.cat([k, torch.zeros((k.size(0), 1) + k.size()[2:],
                        dtype=k.dtype, device=k.device)], dim=1)
@@ -208,14 +354,28 @@ def diff_multi_head_attention_forward(query,
                                                 src_len]
 
     # if attn_mask is not None:
-    #    #attn_mask = attn_mask.unsqueeze(0)
-    #    #breakpoint()
-    #    attn_mask = torch.repeat_interleave(attn_mask, repeats=num_heads, dim=0)
-    #    attn_output_weights *= attn_mask
+    #     attn_mask = torch.repeat_interleave(attn_mask, repeats=num_heads, dim=0)
+    #     #attn_mask = torch.lt(attn_mask, 1)
+    #     attn_output_weights *= attn_mask
+        
+
+    # if attn_mask is not None:
+    #     #breakpoint()
+    #     attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len,
+    #                                                    src_len)
+    #     attn_output_weights = attn_output_weights.masked_fill(
+    #         torch.lt(attn_mask, 1).unsqueeze(1),
+    #         float('-inf'),
+    #     )
+    #     attn_output_weights = attn_output_weights.view(bsz * num_heads,
+    #                                                    tgt_len, src_len)
+
+
 
     if key_padding_mask is not None:
         attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len,
                                                        src_len)
+                                                       
         attn_output_weights = attn_output_weights.masked_fill(
             key_padding_mask.unsqueeze(1).unsqueeze(2),
             float('-inf'),
@@ -233,8 +393,6 @@ def diff_multi_head_attention_forward(query,
                                                 p=dropout_p, training=training)
 
     if attn_mask is not None:
-        #attn_mask = attn_mask.unsqueeze(0)
-        #breakpoint()
         attn_mask = torch.repeat_interleave(attn_mask, repeats=num_heads, dim=0)
         attn_output_weights *= attn_mask
 
@@ -246,45 +404,41 @@ def diff_multi_head_attention_forward(query,
 
 
 class DiffMultiheadAttention(nn.modules.activation.MultiheadAttention):
+    def __init__(self, embed_dim, num_heads, dropout=0., bias=True, add_bias_kv=False, add_zero_attn=False,
+                 kdim=None, vdim=None, batch_first=False, device=None, dtype=None):
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super(DiffMultiheadAttention, self).__init__(embed_dim, num_heads, dropout, bias)
+        self.in_proj_weight_op = Parameter(torch.empty((2 * embed_dim, embed_dim), **factory_kwargs))
+        self._reset_parameters_op()
+    
+    def _reset_parameters_op(self):
+        super(DiffMultiheadAttention, self)._reset_parameters()
+        xavier_uniform_(self.in_proj_weight_op)
+
+
+
     def forward(self, query, key, value, pe, key_padding_mask=None,
-                need_weights=True, attn_mask=None):
-        if hasattr(
-                self, '_qkv_same_embed_dim'
-                ) and self._qkv_same_embed_dim is False:
+                need_weights=True, attn_mask=None, attn_mask_op=None):
             return diff_multi_head_attention_forward(
                     query, key, value, pe, self.embed_dim, self.num_heads,
-                    self.in_proj_weight, self.in_proj_bias, self.bias_k,
+                    self.in_proj_weight, self.in_proj_weight_op, self.in_proj_bias, self.bias_k,
                     self.bias_v, self.add_zero_attn, self.dropout,
                     self.out_proj.weight, self.out_proj.bias,
                     training=self.training, key_padding_mask=key_padding_mask,
-                    need_weights=need_weights, attn_mask=attn_mask,
-                    use_separate_proj_weight=True,
-                    q_proj_weight=self.q_proj_weight,
-                    k_proj_weight=self.k_proj_weight,
-                    v_proj_weight=self.v_proj_weight)
-        else:
-            if not hasattr(self, '_qkv_same_embed_dim'):
-                warnings.warn('A new version of MultiheadAttentio, module has benn implemented. \
-                        Please re-train your model with the new module',
-                              UserWarning)
-            return diff_multi_head_attention_forward(
-                    query, key, value, pe, self.embed_dim, self.num_heads,
-                    self.in_proj_weight, self.in_proj_bias, self.bias_k,
-                    self.bias_v, self.add_zero_attn, self.dropout,
-                    self.out_proj.weight, self.out_proj.bias,
-                    training=self.training, key_padding_mask=key_padding_mask,
-                    need_weights=need_weights, attn_mask=attn_mask)
+                    need_weights=need_weights, attn_mask=attn_mask, attn_mask_op=attn_mask_op)
 
 
 class DiffTransformerEncoderLayer(nn.TransformerEncoderLayer):
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1,
                  activation="relu", batch_norm=False):
         super().__init__(d_model, nhead, dim_feedforward, dropout, activation)
+
+        # TODO lpse : la, je crois qu'il faut doubler la dimension d'entree ( qui va prendre h et p)
+        # de plus, il faut une deuxieme self-attention pour p ( sans doubler la self-attention)
         self.self_attn = DiffMultiheadAttention(d_model, nhead,
                                                 dropout=dropout, bias=False)
-        self.self_attn_op = DiffMultiheadAttention(d_model, nhead,
-                                                dropout=dropout, bias=False)
-
+        
+        
 
         
 
@@ -295,28 +449,13 @@ class DiffTransformerEncoderLayer(nn.TransformerEncoderLayer):
         self.scaling = None
 
     def forward(self, src, pe, degree=None, src_mask=None, src_mask_op=None, src_key_padding_mask=None):
-        attn_output_weights, v, bsz, num_heads, tgt_len, head_dim, out_proj_weight, out_proj_bias, embed_dim, src_len = \
-            self.self_attn(src, src, src, pe, attn_mask=src_mask,
-                              key_padding_mask=src_key_padding_mask)
         
         
-        attn_output_weights_op, v_op, bsz_op, num_heads_op, tgt_len_op, head_dim_op, out_proj_weight_op, out_proj_bias_op, embed_dim_op, src_len_op = \
-            self.self_attn_op(src, src, src, pe, attn_mask=src_mask_op,
+        src2, attn = self.self_attn(src, src, src, pe, attn_mask=src_mask, attn_mask_op=src_mask_op,
                               key_padding_mask=src_key_padding_mask)
 
-        attn_output_weights += attn_output_weights_op
-        
-        attn_output = torch.bmm(attn_output_weights, v)
-        assert list(attn_output.size()) == [bsz * num_heads, tgt_len, head_dim]
-        attn_output = attn_output.transpose(0, 1).contiguous().view(
-                tgt_len, bsz, embed_dim)
-        attn_output = nn.functional.linear(attn_output, out_proj_weight,
-                                       out_proj_bias)
-        attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len,
-                                                       src_len)
         
         
-        src2 = attn_output
         if degree is not None:
             src2 = degree.transpose(0, 1).contiguous().unsqueeze(-1) * src2
         else:

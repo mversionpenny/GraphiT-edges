@@ -148,7 +148,7 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
     running_loss = 0.0
 
     tic = timer()
-    for i, (data, mask, pe, lap_pe, degree, labels) in enumerate(loader):
+    for i, (data, mask, pe, lap_pe, degree, labels, adj_mat, adj_mat_op) in enumerate(loader):
         if args.warmup is not None:
             iteration = epoch * len(loader) + i
             for param_group in optimizer.param_groups:
@@ -164,9 +164,13 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
             if degree is not None:
                 degree = degree.cuda()
             labels = labels.cuda()
+            if adj_mat is not None:
+                    adj_mat = adj_mat.cuda()
+            if adj_mat_op is not None:
+                adj_mat_op = adj_mat_op.cuda()
 
         optimizer.zero_grad()
-        output = model(data, mask, pe, lap_pe, degree)
+        output = model(data, mask, pe, lap_pe, degree, adj_mat, adj_mat_op)
         loss = criterion(output, labels)
         loss.backward()
         optimizer.step()
@@ -189,7 +193,7 @@ def eval_epoch(model, loader, criterion, use_cuda=False):
 
     tic = timer()
     with torch.no_grad():
-        for data, mask, pe, lap_pe, degree, labels in loader:
+        for data, mask, pe, lap_pe, degree, labels, adj_mat, adj_mat_op in loader:
 
             if use_cuda:
                 data = data.cuda()
@@ -201,8 +205,12 @@ def eval_epoch(model, loader, criterion, use_cuda=False):
                 if degree is not None:
                     degree = degree.cuda()
                 labels = labels.cuda()
+                if adj_mat is not None:
+                    adj_mat = adj_mat.cuda()
+                if adj_mat_op is not None:
+                    adj_mat_op = adj_mat_op.cuda()
 
-            output = model(data, mask, pe, lap_pe, degree)
+            output = model(data, mask, pe, lap_pe, degree, adj_mat, adj_mat_op)
             loss = criterion(output, labels)
             mse_loss += F.mse_loss(output, labels).item() * len(data)
             mae_loss += F.l1_loss(output, labels).item() * len(data)
@@ -284,7 +292,7 @@ def main():
             pos_encoding_params = {}
 
         if pos_encoding_method is not None:
-            pos_cache_path = '../cache/pe/zinc_{}_{}_{}.pkl'.format(args.pos_enc, args.normalization, pos_encoding_params_str)
+            pos_cache_path = '../cache/pe/test-lpse/zinc_{}_{}_{}.pkl'.format(args.pos_enc, args.normalization, pos_encoding_params_str)
             pos_encoder = pos_encoding_method(
                 pos_cache_path, normalization=args.normalization, 
                 zero_diag=args.zero_diag, **pos_encoding_params)

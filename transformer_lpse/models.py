@@ -53,6 +53,7 @@ class DiffTransformerEncoder(nn.TransformerEncoder):
     def forward(self, src, pe, degree=None, mask=None, mask_op=None, src_key_padding_mask=None):
         output = src
         for mod in self.layers:
+            # TODO lpse: ici il faudrait deux sorties, l'une pour h (output), et l'autre pour p (pe)
             output = mod(output, pe=pe, degree=degree, src_mask=mask, src_mask_op=mask_op,
                          src_key_padding_mask=src_key_padding_mask)
         if self.norm is not None:
