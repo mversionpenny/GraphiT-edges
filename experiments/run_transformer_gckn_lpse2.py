@@ -11,11 +11,11 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch_geometric import datasets
-from transformer_double_attention.models import DiffGraphTransformer, GraphTransformer
-from transformer_double_attention.data import GraphDataset, OneHotEdges
-from transformer_double_attention.position_encoding import FullEncoding, LapEncoding, POSENCODINGS
-from transformer_double_attention.gckn_pe import GCKNEncoding
-from transformer_double_attention.utils import count_parameters
+from transformer_lpse.models import DiffGraphTransformer, GraphTransformer
+from transformer_lpse.data import GraphDataset, OneHotEdges
+from transformer_lpse.position_encoding import FullEncoding, LapEncoding, POSENCODINGS
+from transformer_lpse.gckn_pe import GCKNEncoding
+from transformer_lpse.utils import count_parameters
 from timeit import default_timer as timer
 from torch import nn, optim
 
@@ -149,10 +149,11 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
 
     tic = timer()
     for i, (data, mask, pe, lap_pe, degree, labels, adj_mat, adj_mat_op) in enumerate(loader):
-        if args.warmup is not None:
-            iteration = epoch * len(loader) + i
-            for param_group in optimizer.param_groups:
-                param_group["lr"] = lr_scheduler(iteration)
+        
+        # if args.warmup is not None:
+        #     iteration = epoch * len(loader) + i
+        #     for param_group in optimizer.param_groups:
+        #         param_group["lr"] = lr_scheduler(iteration)
 
         if use_cuda:
             data = data.cuda()
@@ -340,21 +341,26 @@ def main():
 
     criterion = nn.L1Loss()
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    if args.warmup is None:
-        lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+    # if args.warmup is None:
+    #     lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+    #                                                  factor=0.5,
+    #                                                  patience=25,
+    #                                                  min_lr=1e-06,
+    #                                                  verbose=False)
+    # else:
+    #     lr_steps = (args.lr - 1e-6) / args.warmup
+    #     decay_factor = args.lr * args.warmup ** .5
+    #     def lr_scheduler(s):
+    #         if s < args.warmup:
+    #             lr = 1e-6 + s * lr_steps
+    #         else:
+    #             lr = decay_factor * s ** -.5
+    #         return lr
+    lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                      factor=0.5,
                                                      patience=25,
                                                      min_lr=1e-06,
-                                                     verbose=False)
-    else:
-        lr_steps = (args.lr - 1e-6) / args.warmup
-        decay_factor = args.lr * args.warmup ** .5
-        def lr_scheduler(s):
-            if s < args.warmup:
-                lr = 1e-6 + s * lr_steps
-            else:
-                lr = decay_factor * s ** -.5
-            return lr
+                                                     verbose=True)
 
     test_dset = GraphDataset(test_dset, n_tags, degree=True)
     test_loader = DataLoader(test_dset, batch_size=args.batch_size, shuffle=False, collate_fn=test_dset.collate_fn())
@@ -376,8 +382,9 @@ def main():
         val_loss,_ = eval_epoch(model, val_loader, criterion, args.use_cuda)
         test_loss,_ = eval_epoch(model, test_loader, criterion, args.use_cuda)
 
-        if args.warmup is None:
-            lr_scheduler.step(val_loss)
+
+        #if args.warmup is None:
+        lr_scheduler.step(val_loss)
 
         logs['train_mae'].append(train_loss)
         logs['val_mae'].append(val_loss)

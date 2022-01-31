@@ -50,23 +50,13 @@ class GraphTransformer(nn.Module):
 
 
 class DiffTransformerEncoder(nn.TransformerEncoder):
-    # def __init__(self, encoder_layer, nb_layers, d_model):
-    #     super(DiffTransformerEncoder, self).__init__(encoder_layer, nb_layers)
-    #     self.embedding_concats = nn.ModuleList()
-    #     self.embedding_concats.extend(nn.Linear(in_features=d_model,
-    #                                out_features=int(d_model/2),
-    #                                bias=False) for i in range(nb_layers))
-    
-    
     def forward(self, src, pe, degree=None, mask=None, mask_op=None, src_key_padding_mask=None):
-        len_shape = int(src.shape[2]/2)
-        output = src #src[:,:,:len_shape]
-        output_pe = src[:,:,len_shape:]
-        i = 0
+        output = src
+        output_pe = pe
         for mod in self.layers:
-            output, output_pe = mod(output, output_pe, pe=pe, degree=degree, src_mask=mask, src_mask_op=mask_op,
+            # TODO lpse: ici il faudrait deux sorties, l'une pour h (output), et l'autre pour p (pe)
+            output = mod(output, pe=output_pe, degree=degree, src_mask=mask, src_mask_op=mask_op,
                          src_key_padding_mask=src_key_padding_mask)
-            i+=1
         if self.norm is not None:
             output = self.norm(output)
         return output
@@ -87,16 +77,15 @@ class DiffGraphTransformer(nn.Module):
         self.lap_pos_enc_dim = lap_pos_enc_dim
 
 
+
+
         if lap_pos_enc and lap_pos_enc_dim > 0:
-            self.embedding_lap_pos_enc = nn.Linear(lap_pos_enc_dim, int(d_model/2))
-            self.embedding = nn.Linear(in_features=in_size,
-                                   out_features=int(d_model/2),
-                                   bias=False)
+            self.embedding_lap_pos_enc = nn.Linear(lap_pos_enc_dim, d_model)
             
-        else:
-            self.embedding = nn.Linear(in_features=in_size,
+        self.embedding = nn.Linear(in_features=in_size,
                                    out_features=d_model,
                                    bias=False)
+                                   
         encoder_layer = DiffTransformerEncoderLayer(
                 d_model, nb_heads, dim_feedforward, dropout, batch_norm=batch_norm)
         self.encoder = DiffTransformerEncoder(encoder_layer, nb_layers)
@@ -133,9 +122,7 @@ class DiffGraphTransformer(nn.Module):
         if self.lap_pos_enc and x_lap_pos_enc is not None:
             x_lap_pos_enc = x_lap_pos_enc.transpose(0, 1)
             x_lap_pos_enc = self.embedding_lap_pos_enc(x_lap_pos_enc)
-            # output = output + x_lap_pos_enc
-            output = torch.cat((output, x_lap_pos_enc), -1)
-        
+            output = output + x_lap_pos_enc
         output = self.encoder(output, pe, degree=degree, mask=adj_mat, mask_op=adj_mat_op, src_key_padding_mask=masks)
         output = output.permute(1, 0, 2)
         # we make sure to correctly take the masks into account when pooling

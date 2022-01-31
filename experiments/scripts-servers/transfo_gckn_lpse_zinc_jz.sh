@@ -67,21 +67,21 @@ echo "outdir = $outdir"
 
 
 dataset='ZINC'
-epochs=500
-seeds=0 #"0 1 2 3"
+epochs=1500
+seeds=1 #"0 1 2 3"
 
-pos_enc="diffusion"
+pos_enc="pstep"
 normalization="sym"
-gckn_dims="32"
+gckn_dims="128"
 gckn_paths="8"
 gckn_sigmas="0.6"
 gckn_pooling="sum"
-ps="1"  # "2 3"
-betas="0.5" #"0.5 0.6" # "0.5"
+ps="16"  # "2 3"
+betas="0.25" #"0.5 0.6" # "0.5"
 nb_heads=8
-nb_layers=5 #"3 4 5"
+nb_layers=10 #"3 4 5"
 dim_hiddens=128 #"64 128 256"
-lrs="0.001"  #"0.001 0.0001 0.00001"
+lrs="0.0007"  #"0.001 0.0001 0.00001"
 wds="0.001" #"0.001 0.0001"
 dropouts=0.3 #"0.0 0.3"
 
@@ -102,15 +102,15 @@ for gckn_sigma in $gckn_sigmas; do
         for dropout in $dropouts; do
 
 			params="${lr}_${nb_layer}_${nb_heads}_${dim_hidden}_BN_${pos_enc}_${normalization}_${p}_${beta}_${wd}_${dropout}"			
-			if [ ! -f ${outdir}${seed}/transformer/ZINC${zero_diag_attr}${edge_attr}/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv ]; then					
+			#if [ ! -f ${outdir}${seed}/transformer/ZINC${zero_diag_attr}${edge_attr}/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv ]; then					
 			echo ${outdir}${seed}/transformer/ZINC${zero_diag_attr}${edge_attr}/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv
             args="--outdir ${outdir}${seed} --seed ${seed} --epochs ${epochs} \
             --pos-enc ${pos_enc} --p ${p} --beta ${beta} \
             --gckn-dim ${gckn_dim} --gckn-path ${gckn_path} --gckn-sigma ${gckn_sigma} --gckn-pooling ${gckn_pooling} \
             --nb-heads ${nb_heads} --nb-layers ${nb_layer} --dim-hidden ${dim_hidden} --lr ${lr} --weight-decay ${wd} --dropout ${dropout} \
-            --warmup 2000 ${encode_edge} ${use_edge_attr} ${zero_diag}"  
+             ${encode_edge} ${use_edge_attr} ${zero_diag}"  
 			sendjob "$args"
-			fi
+			#fi
         done
         done
         done

@@ -31,4 +31,4 @@ args=$1
 
 echo "$args"
 
-python -u $WORK/GraphiT-edges/experiments/run_transformer_gckn_lpse.py $args
+python -u $WORK/GraphiT-edges/experiments/run_transformer_gckn_lpse2.py $args

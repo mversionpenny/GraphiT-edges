@@ -42,7 +42,7 @@ def main():
     
     
 
-    path_base = '/gpfswork/rech/tbr/uho58uo/results-transfo-gckn-zinc/seed'
+    path_base = '/gpfswork/rech/tbr/uho58uo/test-lpse/results-transfo-gckn-zinc/seed'
    
     best_val_path = ''
     test_mae_list = []
@@ -56,7 +56,7 @@ def main():
                             for wd in wd_list:
                                 for drp in drp_list:
                                     
-                                    path = path_base + '{}/transformer/ZINC/zero_diag/edge_attr/gckn_{}_{}_{}_{}_{}_{}_{}/'.format(
+                                    path = path_base + '{}/transformer/ZINC/edge_attr/gckn_{}_{}_{}_{}_{}_{}_{}/'.format(
                                         seed, gckn_path, gckn_dim, gckn_sigma, gckn_pooling, True, True, encode_edge
                                     ) + '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}/'.format(
                                         lr, nb_layers, nb_heads, dim_hidden, bn, pos_enc, normalization, p, beta,

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 sendjob(){
-        max_jobs=250
+        max_jobs=150
         counter=`squeue -u $USER | wc -l`
         echo $counter
         while [ "$counter" -ge "$max_jobs" ]; do
@@ -9,8 +9,9 @@ sendjob(){
                 counter=`squeue -u $USER | wc -l`
                 echo $counter
         done
-        sbatch $WORK/GraphiT-edges/experiments/scripts-servers/transfo_gckn_zinc_jz.slurm "$1"
+        sbatch $WORK/GraphiT-edges/experiments/scripts-servers/transfo_gckn_lpse_zinc_jz.slurm "$1"
 }
+
 
 while getopts e:u:z: flag
 do
@@ -21,7 +22,7 @@ do
     esac
 done
 
-outdir=$WORK/test-lpse/normal/results-transfo-gckn-zinc/seed
+outdir=$WORK/test-lpse/results-transfo-gckn-zinc/seed
 
 echo "encode -e : $encode_e"
 if [ $encode_e = 'e' ]; then
@@ -43,7 +44,7 @@ elif [ $use_e = 'ne' ]; then
 	use_edge_attr=''
     edge_attr=''
 else
-	echo "Error: Argument -e should be 'e' or 'ne'. Exiting now."
+	echo "Error: Argument -u should be 'e' or 'ne'. Exiting now."
 	exit 2
 fi
 
@@ -62,17 +63,12 @@ fi
 echo "outdir = $outdir"
 
 
-# outdir = outdir + '/{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
-#            args.lr, args.nb_layers, args.nb_heads, args.dim_hidden, bn,
-#            args.pos_enc, args.normalization, args.p, args.beta, 
-#            args.weight_decay, args.dropout
-#        )
 
-# gckn_8_32_0.6_sum_True_True_True/0.0001_5_8_128_BN_None_sym_1_0.5_0.0001_0.0/results.csv  not found.
 
 
 dataset='ZINC'
 epochs=1500
+batch_size=128
 seeds=1 #"0 1 2 3"
 
 pos_enc="diffusion"
@@ -91,6 +87,7 @@ wds="0.001" #"0.001 0.0001"
 dropouts=0.3 #"0.0 0.3"
 
 
+
 echo "/!\  ps are $ps, beta are $betas and pos_enc is $pos_enc"
 
 for seed in $seeds; do
@@ -106,15 +103,15 @@ for gckn_sigma in $gckn_sigmas; do
         for dropout in $dropouts; do
 
 			params="${lr}_${nb_layer}_${nb_heads}_${dim_hidden}_BN_${pos_enc}_${normalization}_${p}_${beta}_${wd}_${dropout}"			
-			if [ ! -f ${outdir}${seed}/transformer/ZINC${zero_diag_attr}${edge_attr}/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv ]; then					
+			#if [ ! -f ${outdir}${seed}/transformer/ZINC${zero_diag_attr}${edge_attr}/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv ]; then					
 			echo ${outdir}${seed}/transformer/ZINC${zero_diag_attr}${edge_attr}/gckn_${gckn_path}_${gckn_dim}_${gckn_sigma}_${gckn_pooling}_True_True_${path_edge}/${params}/results.csv
-            args="--outdir ${outdir}${seed} --seed ${seed} --epochs ${epochs} \
+            args="--outdir ${outdir}${seed} --seed ${seed} --epochs ${epochs} --batch-size ${batch_size} \
             --pos-enc ${pos_enc} --p ${p} --beta ${beta} \
             --gckn-dim ${gckn_dim} --gckn-path ${gckn_path} --gckn-sigma ${gckn_sigma} --gckn-pooling ${gckn_pooling} \
             --nb-heads ${nb_heads} --nb-layers ${nb_layer} --dim-hidden ${dim_hidden} --lr ${lr} --weight-decay ${wd} --dropout ${dropout} \
-            --warmup 2000 ${encode_edge} ${use_edge_attr} ${zero_diag}"  
+             ${encode_edge} ${use_edge_attr} ${zero_diag}"  
 			sendjob "$args"
-			fi
+			#fi
         done
         done
         done

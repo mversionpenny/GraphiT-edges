@@ -435,22 +435,19 @@ class DiffTransformerEncoderLayer(nn.TransformerEncoderLayer):
 
         # TODO lpse : la, je crois qu'il faut doubler la dimension d'entree ( qui va prendre h et p)
         # de plus, il faut une deuxieme self-attention pour p ( sans doubler la self-attention)
-
         # TRES IMPORTANT comprendre pe d'entree
-        self.self_attn = DiffMultiheadAttention(d_model, nhead,
-                                                dropout=dropout, bias=False)
-
-        # self.self_attn_pe = nn.modules.activation.MultiheadAttention(int(d_model/2), nhead,
+        # self.self_attn = DiffMultiheadAttention(d_model*2, nhead,
         #                                         dropout=dropout, bias=False)
 
-        self.embed_for_concat = nn.Linear(in_features=d_model,
-                                   out_features=int(d_model/2),
-                                   bias=False)
+        # self.self_attn_pe = nn.modules.activation.MultiheadAttention(d_model, nhead,
+        #                                         dropout=dropout, bias=False)
 
-        self.self_attn_pe = DiffMultiheadAttention(int(d_model/2), nhead,
+        self.self_attn = DiffMultiheadAttention(d_model, nhead,
                                                 dropout=dropout, bias=False)
         
+        
 
+        
 
         self.batch_norm = batch_norm
         if batch_norm:
@@ -458,18 +455,21 @@ class DiffTransformerEncoderLayer(nn.TransformerEncoderLayer):
             self.norm2 = nn.BatchNorm1d(d_model)
         self.scaling = None
 
-    def forward(self, src, src_pe, pe, degree=None, src_mask=None, src_mask_op=None, src_key_padding_mask=None):
-       
+    def forward(self, src, pe, degree=None, src_mask=None, src_mask_op=None, src_key_padding_mask=None):
+        
+        
         src2, attn = self.self_attn(src, src, src, pe, attn_mask=src_mask, attn_mask_op=src_mask_op,
                               key_padding_mask=src_key_padding_mask)
 
+        # src2_pe, attn_pe = self.self_attn_pe(src, src, src, pe, attn_mask=src_mask, attn_mask_op=src_mask_op,
+        #                       key_padding_mask=src_key_padding_mask)
+        # TODO lpse :
+        # Il faut un DiffMUltiHeadAttention different, sans pe
+        # il faut un tanh!
+        # en entrée il faut mettre pe plutot! mais pour cela il faut comprendre ce que c'est dans le cadre de lpse
 
-        pe_pe = torch.ones(pe.shape).cuda()
-        #pe_pe = pe
-        src2_pe, attn_pe = self.self_attn_pe(src_pe, src_pe, src_pe, pe_pe, attn_mask=src_mask, attn_mask_op=src_mask_op,
-                              key_padding_mask=src_key_padding_mask)
-
-        src2_pe = src_pe + torch.tanh(src2_pe)     
+        
+        
         if degree is not None:
             src2 = degree.transpose(0, 1).contiguous().unsqueeze(-1) * src2
         else:
@@ -486,9 +486,5 @@ class DiffTransformerEncoderLayer(nn.TransformerEncoderLayer):
         src = self.norm2(src)
         if self.batch_norm:
             src = src.view(-1, bsz, src.shape[-1])
-
-        src = self.embed_for_concat(src)
-        src = torch.cat((src, src2_pe), dim=-1) # check if src2_pe or src_pe
-
-        return src, src2_pe
+        return src
 
