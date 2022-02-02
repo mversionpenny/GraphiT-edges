@@ -9,7 +9,7 @@ sendjob(){
                 counter=`squeue -u $USER | wc -l`
                 echo $counter
         done
-        sbatch $WORK/GraphiT-edges/experiments/scripts-servers/transfo_gckn_lpse_zinc_jz.slurm "$1"
+        sbatch $WORK/GraphiT-edges/experiments/scripts-servers/transfo_gckn_lpse_zinc_jz2.slurm "$1"
 }
 
 
@@ -67,7 +67,7 @@ echo "outdir = $outdir"
 
 
 dataset='ZINC'
-epochs=1500
+epochs=1000
 batch_size=128
 seeds=1 #"0 1 2 3"
 

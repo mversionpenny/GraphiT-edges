@@ -70,18 +70,18 @@ dataset='ZINC'
 epochs=1500
 seeds=1 #"0 1 2 3"
 
-pos_enc="pstep"
+pos_enc="diffusion"
 normalization="sym"
-gckn_dims="128"
+gckn_dims="32"
 gckn_paths="8"
 gckn_sigmas="0.6"
 gckn_pooling="sum"
-ps="16"  # "2 3"
-betas="0.25" #"0.5 0.6" # "0.5"
+ps="1"  # "2 3"
+betas="0.5" #"0.5 0.6" # "0.5"
 nb_heads=8
-nb_layers=10 #"3 4 5"
+nb_layers=5 #"3 4 5"
 dim_hiddens=128 #"64 128 256"
-lrs="0.0007"  #"0.001 0.0001 0.00001"
+lrs="0.001"  #"0.001 0.0001 0.00001"
 wds="0.001" #"0.001 0.0001"
 dropouts=0.3 #"0.0 0.3"
 

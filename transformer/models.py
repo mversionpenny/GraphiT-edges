@@ -93,13 +93,16 @@ class DiffGraphTransformer(nn.Module):
 
         self.use_edge_attr = use_edge_attr
         if use_edge_attr:
-            # self.ref = nn.Parameter(torch.zeros((max_num_nodes, max_num_nodes)))
             if type(num_edge_features) is list:
                 num_tmp = sum(num_edge_features)
                 self.coef = nn.Parameter(torch.ones(num_tmp) / num_tmp)
             if type(num_edge_features) is int:
                 self.coef = nn.Parameter(torch.ones(num_edge_features) / num_edge_features)
-            # self.sum_pooling = GlobalSum1D()
+            # if type(num_edge_features) is list:
+            #     num_tmp = sum(num_edge_features)
+            #     self.coef = (torch.ones(num_tmp) / num_tmp).cuda()
+            # if type(num_edge_features) is int:
+            #     self.coef = (torch.ones(num_edge_features) / num_edge_features).cuda()
             
     def forward(self, x, masks, pe, x_lap_pos_enc=None, degree=None):
         if self.use_edge_attr and pe.ndim == 4:

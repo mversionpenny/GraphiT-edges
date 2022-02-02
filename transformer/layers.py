@@ -220,8 +220,7 @@ def diff_multi_head_attention_forward(query,
         )
         attn_output_weights = attn_output_weights.view(bsz * num_heads,
                                                        tgt_len, src_len)
-
-    pe = torch.repeat_interleave(pe, repeats=num_heads, dim=0)
+    pe = torch.repeat_interleave(pe.squeeze(), repeats=num_heads, dim=0)
     # numerical stability
     max_val = attn_output_weights.max(dim=-1, keepdim=True)[0]
     attn_output_weights = torch.exp(attn_output_weights - max_val)
